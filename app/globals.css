@@ -1,0 +1,659 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Deep navy / near-black dashboard base */
+    --background: 222 52% 4%;
+    --foreground: 210 40% 98%;
+    --card: 222 40% 7%;
+    --card-foreground: 210 40% 98%;
+    --primary: 187 85% 43%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 222 32% 12%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 220 20% 18%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 195 100% 50%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 20% 16%;
+    --input: 220 20% 16%;
+    --ring: 187 70% 45%;
+    --radius: 0.6rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Stronger background treatment when nav “glow” toggle is on */
+html[data-glow-vivid] .orb-1 {
+  background: radial-gradient(
+    circle,
+    rgba(6, 182, 212, 0.32) 0%,
+    transparent 70%
+  ) !important;
+}
+html[data-glow-vivid] .orb-3 {
+  background: radial-gradient(
+    circle,
+    rgba(168, 85, 247, 0.2) 0%,
+    transparent 70%
+  ) !important;
+}
+
+/* Animated background grid */
+.bg-grid-anim {
+  background-size: 48px 48px;
+  background-image: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.04) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  animation: grid-drift 50s linear infinite;
+}
+
+/* Floating orbs */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(64px);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.orb-1 {
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(
+    circle,
+    rgba(6, 182, 212, 0.25) 0%,
+    transparent 70%
+  );
+  top: -120px;
+  right: 10%;
+  animation: float 9s ease-in-out infinite, orb-1 22s ease-in-out infinite;
+}
+
+.orb-2 {
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(
+    circle,
+    rgba(59, 130, 246, 0.18) 0%,
+    transparent 70%
+  );
+  bottom: 5%;
+  left: -5%;
+  animation: float 8s ease-in-out infinite 1s, orb-2 26s ease-in-out infinite;
+}
+
+.orb-3 {
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(
+    circle,
+    rgba(168, 85, 247, 0.12) 0%,
+    transparent 70%
+  );
+  top: 40%;
+  left: 30%;
+  animation: float 10s ease-in-out infinite 0.5s, orb-1 30s ease-in-out infinite
+    reverse;
+}
+
+/* 3D tilt card (JS optional enhancement via data attribute) */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.tilt-card {
+  transform-style: preserve-3d;
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+  will-change: transform;
+}
+.tilt-card:hover {
+  transform: rotateX(1deg) rotateY(-1.5deg) translateZ(0) scale(1.01);
+  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.15), 0 20px 50px -20px
+    rgba(0, 0, 0, 0.6);
+}
+
+/* Gradient text */
+.text-gradient {
+  @apply bg-clip-text text-transparent;
+  background-image: linear-gradient(
+    120deg,
+    #e2e8f0 0%,
+    #7dd3fc 45%,
+    #a5f3fc 100%
+  );
+}
+
+/* Terminal line typing animation */
+@keyframes terminal-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+.terminal-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  background: #22d3ee;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: terminal-blink 1.1s step-end infinite;
+}
+
+/* Radial hero vignette */
+.vignette {
+  background: radial-gradient(
+    ellipse 80% 50% at 50% 0%,
+    rgba(6, 182, 212, 0.12) 0%,
+    transparent 55%
+  );
+}
+
+/* Soft pulse ring */
+.pulse-glow {
+  animation: pulseSoft 3.5s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-8px) scale(1.02);
+  }
+}
+
+@keyframes orb-1 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(24px, -16px);
+  }
+}
+
+@keyframes orb-2 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-20px, 12px);
+  }
+}
+
+@keyframes pulseSoft {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+
+@keyframes grid-drift {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 50px 50px;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.glass {
+  @apply border border-white/[0.08] bg-zinc-950/40 shadow-xl backdrop-blur-xl;
+  background: linear-gradient(
+    135deg,
+    rgba(24, 24, 27, 0.85) 0%,
+    rgba(9, 9, 11, 0.55) 100%
+  );
+}
+
+/* Focus visible for keyboard users */
+:where(a, button) {
+  @apply outline-none;
+}
+:where(a, button):focus-visible {
+  @apply ring-2 ring-cyan-500/50 ring-offset-2 ring-offset-zinc-950;
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-xl border border-white/[0.1] bg-zinc-950/60 shadow-[0_0_0_1px_rgba(6,182,212,0.08),0_12px_40px_-20px_rgba(0,0,0,0.65)] backdrop-blur-md;
+    background: linear-gradient(
+      140deg,
+      rgba(24, 24, 27, 0.82) 0%,
+      rgba(9, 9, 11, 0.5) 100%
+    );
+  }
+
+  .bg-grid-fine {
+    background-size: 20px 20px;
+    background-image: linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0.03) 1px,
+        transparent 1px
+      ),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  }
+
+  .mask-radial-fade {
+    -webkit-mask-image: radial-gradient(
+      ellipse 75% 65% at 50% 40%,
+      black 0%,
+      transparent 70%
+    );
+    mask-image: radial-gradient(
+      ellipse 75% 65% at 50% 40%,
+      black 0%,
+      transparent 70%
+    );
+  }
+
+  .bg-scanlines {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.18) 2px,
+      rgba(0, 0, 0, 0.18) 3px
+    );
+  }
+
+  .texture-grain {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  }
+}
+
+/* Animated rings behind hero */
+.ring-orbit {
+  border: 1px solid rgba(6, 182, 212, 0.12);
+  border-radius: 9999px;
+  animation: ring-pulse 14s ease-in-out infinite;
+}
+.ring-orbit-slow {
+  border: 1px solid rgba(139, 92, 246, 0.1);
+  border-radius: 9999px;
+  animation: ring-drift 22s linear infinite;
+}
+
+@keyframes ring-pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.04);
+    opacity: 0.85;
+  }
+}
+
+@keyframes ring-drift {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg) scale(1);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg) scale(1.02);
+  }
+}
+
+/* Hero mech / “transformer” ring — slow counter-rotating HUD */
+@keyframes hero-mech-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.hero-mech-ring-outer {
+  animation: hero-mech-spin 32s linear infinite;
+}
+.hero-mech-ring-mid {
+  animation: hero-mech-spin 20s linear infinite;
+}
+.hero-mech-ring-rev {
+  animation: hero-mech-spin 26s linear infinite reverse;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-mech-ring-outer,
+  .hero-mech-ring-mid,
+  .hero-mech-ring-rev {
+    animation: none !important;
+  }
+}
+
+/* Gentle float after hero “dive” intro — visible 3D yaw/roll, not just Y nudge */
+@keyframes hero-scene-drift {
+  0%,
+  100% {
+    transform: translateY(0) rotateX(0.25deg) rotateY(-0.5deg) translateZ(0);
+  }
+  50% {
+    transform: translateY(-7px) rotateX(-0.2deg) rotateY(0.5deg) translateZ(0);
+  }
+}
+
+.hero-scene-drift {
+  animation: hero-scene-drift 4.2s ease-in-out infinite;
+  animation-delay: 0.1s;
+}
+
+/* Softer idle motion so the whole block doesn’t “hover off” the page */
+@keyframes hero-scene-drift-subtle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.hero-scene-drift-subtle {
+  animation: hero-scene-drift-subtle 5.5s ease-in-out infinite;
+  animation-delay: 0.1s;
+}
+
+/* Command block: receding “deck” under the terminal (3D read) */
+
+.hero-3d-pedestal {
+  transform: rotateX(78deg) translateY(12%) scale(1.12);
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+  background: radial-gradient(
+      ellipse 70% 55% at 50% 0%,
+      rgba(6, 182, 212, 0.22) 0%,
+      rgba(0, 0, 0, 0) 70%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(6, 182, 212, 0) 0%,
+      rgba(6, 182, 212, 0.12) 50%,
+      rgba(6, 182, 212, 0) 100%
+    );
+  box-shadow: 0 0 60px rgba(6, 182, 212, 0.15), 0 24px 0 rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  border-radius: 1.25rem;
+  opacity: 0.5;
+  filter: blur(0.2px);
+}
+
+/* Hero-only: perspective floor, particles, border shimmer, scan (see HeroBackdrop / HeroCommandCenter) */
+.hero-perspective {
+  perspective: 1000px;
+  perspective-origin: 50% 0%;
+}
+.hero-grid-floor {
+  transform: rotateX(70deg) translateY(4%) scale(1.05);
+  transform-origin: 50% 0%;
+  background-image: linear-gradient(
+      rgba(6, 182, 212, 0.1) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(6, 182, 212, 0.08) 1px,
+      transparent 1px
+    );
+  background-size: 44px 44px;
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 80%);
+  mask-image: linear-gradient(to bottom, black 0%, transparent 80%);
+  animation: hero-floor-drift 48s linear infinite;
+}
+@keyframes hero-floor-drift {
+  0% {
+    background-position: 0 0, 0 0;
+  }
+  100% {
+    background-position: 44px 44px, 44px 44px;
+  }
+}
+
+.hero-particles {
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.1) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 88% 58% at 50% 28%,
+    black 0%,
+    transparent 70%
+  );
+  mask-image: radial-gradient(
+    ellipse 88% 58% at 50% 28%,
+    black 0%,
+    transparent 70%
+  );
+}
+
+.hero-border-shimmer {
+  position: relative;
+  isolation: isolate;
+}
+.hero-border-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    rgba(6, 182, 212, 0.35),
+    rgba(0, 0, 0, 0) 20%,
+    rgba(99, 102, 241, 0.28),
+    rgba(0, 0, 0, 0) 50%,
+    rgba(6, 182, 212, 0.25) 100%
+  );
+  opacity: 0.3;
+  animation: hero-shimmer-rotate 14s linear infinite;
+  pointer-events: none;
+  /* ring mask: hollow center */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+}
+@keyframes hero-shimmer-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hero-scan-sweep {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(6, 182, 212, 0.1) 45%,
+    transparent 100%
+  );
+  background-size: 100% 200%;
+  animation: hero-scan 5.5s ease-in-out infinite;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+@keyframes hero-scan {
+  0% {
+    background-position: 0 120%;
+  }
+  100% {
+    background-position: 0 -20%;
+  }
+}
+
+/* Site header: “command bar” — muted cyan frame (matches site; low purple) */
+.site-header-outer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 1.25rem;
+  padding: 1.5px;
+  background: linear-gradient(
+    125deg,
+    rgba(6, 182, 212, 0.38),
+    rgba(39, 99, 112, 0.35),
+    rgba(6, 182, 212, 0.45),
+    rgba(63, 78, 95, 0.32),
+    rgba(6, 182, 212, 0.38)
+  );
+  background-size: 200% 200%;
+  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.1), 0 0 28px -4px rgba(6, 182, 212, 0.14);
+  animation: site-header-border-flow 7s ease infinite;
+}
+@keyframes site-header-border-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+.site-header-aurora {
+  pointer-events: none;
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(32px);
+  opacity: 0.4;
+  animation: site-header-aurora-pulse 5s ease-in-out infinite;
+}
+@keyframes site-header-aurora-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    opacity: 0.48;
+    transform: scale(1.04) translate(2px, -1px);
+  }
+}
+.site-header-sheen {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.15rem;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .site-header-sheen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 0%,
+      rgba(6, 182, 212, 0) 40%,
+      rgba(34, 211, 238, 0.05) 50%,
+      rgba(113, 113, 122, 0.04) 55%,
+      rgba(6, 182, 212, 0) 60%,
+      transparent 100%
+    );
+    transform: translateX(-60%);
+    animation: site-header-sheen-move 5.5s ease-in-out infinite;
+    pointer-events: none;
+  }
+}
+@keyframes site-header-sheen-move {
+  0%,
+  20% {
+    transform: translateX(-80%);
+  }
+  50%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+/* Top “signal” line — cool cyan / slate, no pink */
+.site-header-signal {
+  position: relative;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(6, 95, 110, 0.3) 18%,
+    rgba(6, 182, 212, 0.55) 40%,
+    rgba(45, 212, 191, 0.35) 55%,
+    rgba(6, 182, 212, 0.45) 70%,
+    rgba(6, 95, 110, 0.15) 88%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  box-shadow: 0 0 10px 0.5px rgba(6, 182, 212, 0.12);
+  opacity: 0.75;
+}
+@keyframes site-header-signal {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .site-header-signal-anim {
+    animation: site-header-signal 4s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header-outer,
+  .site-header-aurora,
+  .site-header-sheen::before,
+  .site-header-signal-anim {
+    animation: none !important;
+  }
+  .ring-orbit,
+  .ring-orbit-slow,
+  .bg-grid-anim,
+  .orb {
+    animation: none !important;
+  }
+  .hero-scene-drift,
+  .hero-scene-drift-subtle {
+    transform: none !important;
+    animation: none !important;
+  }
+  .hero-grid-floor,
+  .hero-border-shimmer::before,
+  .hero-scan-sweep {
+    animation: none !important;
+  }
+  .hero-border-shimmer::before {
+    transform: none !important;
+  }
+}
