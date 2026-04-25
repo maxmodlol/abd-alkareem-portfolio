@@ -39,22 +39,6 @@
   }
 }
 
-/* Stronger background treatment when nav “glow” toggle is on */
-html[data-glow-vivid] .orb-1 {
-  background: radial-gradient(
-    circle,
-    rgba(6, 182, 212, 0.32) 0%,
-    transparent 70%
-  ) !important;
-}
-html[data-glow-vivid] .orb-3 {
-  background: radial-gradient(
-    circle,
-    rgba(168, 85, 247, 0.2) 0%,
-    transparent 70%
-  ) !important;
-}
-
 /* Animated background grid */
 .bg-grid-anim {
   background-size: 48px 48px;

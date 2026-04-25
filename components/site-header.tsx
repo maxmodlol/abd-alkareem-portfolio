@@ -6,7 +6,6 @@ import { Menu, Sparkles, X } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
-import { ThemeVividToggle } from "@/components/ui/theme-vivid-toggle";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -163,7 +162,6 @@ export function SiteHeader() {
                 className="hidden h-6 w-[2px] rounded-full bg-gradient-to-b from-cyan-500/15 via-cyan-400/25 to-zinc-600/20 md:block"
                 aria-hidden
               />
-              <ThemeVividToggle />
               <Button
                 asChild
                 size="sm"
