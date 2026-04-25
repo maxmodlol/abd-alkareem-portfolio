@@ -45,27 +45,21 @@ function ModuleChip({
   label,
   detail,
   icon: Icon,
-  delay = 0,
   compact = false,
 }: {
   label: string;
   detail: string;
   icon: React.ComponentType<{ className?: string }>;
-  delay?: number;
   compact?: boolean;
 }) {
-  const reduce = useReducedMotion();
   return (
-    <motion.div
+    <div
       className={cn(
         "flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-zinc-950/70 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] backdrop-blur-sm",
         compact
           ? "min-h-0 gap-1 px-1.5 py-1"
           : "min-h-[3.25rem] gap-2 rounded-xl px-2.5 py-2",
       )}
-      initial={reduce ? false : { opacity: 0, y: 8 }}
-      animate={reduce ? undefined : { opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
     >
       <div
         className={cn(
@@ -103,7 +97,7 @@ function ModuleChip({
         title="OK"
         aria-label="OK"
       />
-    </motion.div>
+    </div>
   );
 }
 
@@ -281,19 +275,13 @@ function TiltLayer({
  */
 export function HeroSystemScene() {
   const reduce = useReducedMotion();
-  const [lineCount, setLineCount] = React.useState(0);
+  const lineCount = TERMINAL_LINES.length;
   const ref = React.useRef<HTMLDivElement>(null);
   const mx = useMotionValue(0.5);
   const my = useMotionValue(0.35);
   const smx = useSpring(mx, { stiffness: 28, damping: 24 });
   const smy = useSpring(my, { stiffness: 28, damping: 24 });
   const spotlight = useMotionTemplate`radial-gradient(560px 400px at ${smx} ${smy}, rgba(6, 182, 212, 0.12), transparent 50%)`;
-
-  React.useEffect(() => {
-    if (lineCount >= TERMINAL_LINES.length) return;
-    const t = setTimeout(() => setLineCount((c) => c + 1), 130);
-    return () => clearTimeout(t);
-  }, [lineCount]);
 
   const onMove = (e: React.MouseEvent) => {
     if (reduce || !ref.current) return;
@@ -327,14 +315,13 @@ export function HeroSystemScene() {
             <CoreTerminal lineCount={lineCount} />
           </div>
           <div className="relative z-[2] mt-1.5 grid w-full min-h-0 grid-cols-2 gap-0.5 sm:mt-2 sm:grid-cols-3 sm:gap-1">
-            {MODULES.map((m, i) => (
+            {MODULES.map((m) => (
               <ModuleChip
                 key={m.id}
                 label={m.label}
                 detail={m.detail}
                 icon={m.icon}
                 compact
-                delay={0.03 * i + 0.04}
               />
             ))}
           </div>

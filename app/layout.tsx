@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
+import { getSiteUrl } from "@/lib/site";
+
 import "./globals.css";
 
 const inter = Inter({
@@ -32,30 +34,43 @@ const keywords: string[] = [
   "Palestine",
   "Remote Developer",
 ];
+const defaultTitle = `${siteName} | Full-Stack Software Engineer`;
+
+const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
-  title: `${siteName} | Full-Stack Software Engineer`,
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: defaultTitle,
+    template: `%s | ${siteName}`,
+  },
+  applicationName: siteName,
   description: siteDescription,
   keywords,
   authors: [{ name: siteName, url: "https://github.com/maxmodlol" }],
+  creator: siteName,
+  alternates: { canonical: "/" },
   openGraph: {
-    title: `${siteName} | Full-Stack Software Engineer`,
-    description: siteDescription,
     type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName,
+    title: defaultTitle,
+    description: siteDescription,
   },
   twitter: {
     card: "summary_large_image",
-    title: `${siteName} | Full-Stack Software Engineer`,
+    title: defaultTitle,
     description: siteDescription,
   },
-  robots: {
-    index: true,
-    follow: true,
-  },
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true } },
+  formatDetection: { email: true, address: true, telephone: true },
+  referrer: "strict-origin-when-cross-origin",
 };
 
 export const viewport: Viewport = {
   themeColor: "#09090b",
+  colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
 };

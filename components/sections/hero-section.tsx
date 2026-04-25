@@ -16,12 +16,11 @@ import { cn } from "@/lib/utils";
 const EASE: [number, number, number, number] = [0.2, 0.85, 0.22, 1];
 
 const item = (delay: number) => ({
-  hidden: { opacity: 0, y: 22, filter: "blur(4px)" },
+  hidden: { opacity: 0, y: 10 },
   show: {
     opacity: 1,
     y: 0,
-    filter: "blur(0px)",
-    transition: { duration: 0.7, delay, ease: EASE },
+    transition: { duration: 0.32, delay, ease: EASE },
   },
 });
 
@@ -29,7 +28,7 @@ const backdropFade = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { duration: 0.8, ease: "easeOut" as const },
+    transition: { duration: 0.28, ease: "easeOut" as const },
   },
 };
 
@@ -96,13 +95,13 @@ export function HeroSection() {
       <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-[100rem] flex-1 flex-col content-stretch justify-center gap-2 px-4 py-3 sm:gap-3 sm:px-5 sm:py-4 md:px-6 lg:h-full lg:max-h-full lg:grid lg:grid-cols-2 lg:items-stretch lg:gap-6 lg:px-8 lg:py-5 xl:gap-8 xl:px-10 2xl:px-12">
         <div className="flex min-h-0 min-w-0 w-full max-w-none flex-col lg:h-full lg:min-h-0 lg:justify-between lg:gap-4 lg:pr-1">
           <div className="space-y-1.5 sm:space-y-2.5 lg:space-y-3">
-            <motion.div variants={item(0.06)} initial="hidden" animate="show">
+            <motion.div variants={item(0)} initial="hidden" animate="show">
               <HeroGlowBadge>
                 Open to remote &amp; relocation opportunities
               </HeroGlowBadge>
             </motion.div>
             <motion.h1
-              variants={item(0.14)}
+              variants={item(0.04)}
               initial="hidden"
               animate="show"
               className="text-balance text-[1.45rem] font-semibold leading-[1.1] tracking-[-0.02em] text-zinc-50 sm:text-[1.5rem] md:text-[1.65rem] lg:text-[1.85rem] lg:leading-[1.08] xl:text-[2rem] xl:leading-[1.07] 2xl:text-[2.1rem]"
@@ -114,7 +113,7 @@ export function HeroSection() {
               <HeroSubheadlineTech className="text-sm leading-[1.65] text-zinc-400/95 sm:text-base sm:leading-[1.62] lg:line-clamp-none lg:max-w-none lg:text-[1.05rem] lg:leading-[1.6] xl:max-w-[48rem] xl:text-[1.1rem] 2xl:text-[1.12rem]" />
             </motion.div>
             <motion.div
-              variants={item(0.32)}
+              variants={item(0.12)}
               initial="hidden"
               animate="show"
               className="pt-0"
@@ -124,7 +123,7 @@ export function HeroSection() {
           </div>
           <div className="mt-4 space-y-2.5 sm:mt-5 lg:mt-0">
             <motion.div
-              variants={item(0.4)}
+              variants={item(0.16)}
               initial="hidden"
               animate="show"
               className="flex flex-col gap-2 pt-0.5 sm:flex-row sm:flex-wrap sm:items-center"
@@ -171,7 +170,7 @@ export function HeroSection() {
               </Button>
             </motion.div>
             <motion.div
-              variants={item(0.5)}
+              variants={item(0.2)}
               initial="hidden"
               animate="show"
               className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs leading-normal text-zinc-500/95 sm:gap-x-2.5"
@@ -197,7 +196,7 @@ export function HeroSection() {
           className="pointer-events-auto"
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.9, duration: 0.5, ease: EASE }}
+          transition={{ delay: 0.28, duration: 0.35, ease: EASE }}
         >
           <HeroScrollHint href="#projects" className="max-lg:scale-95 lg:scale-90" />
         </motion.div>

@@ -1,3 +1,4 @@
+import { HomeJsonLd } from "@/app/json-ld";
 import { SiteBackground } from "@/components/site-background";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -13,6 +14,7 @@ import { SkillsSection } from "@/components/sections/skills-section";
 export default function Home() {
   return (
     <div className="relative min-h-screen">
+      <HomeJsonLd />
       <SiteBackground />
       <SiteHeader />
       <main>
