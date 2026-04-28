@@ -2,7 +2,7 @@ export function SiteFooter() {
   return (
     <footer className="relative border-t border-white/[0.07] bg-zinc-950/60 px-4 py-12 sm:px-6">
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/20 to-transparent"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-neon-lime/20 to-transparent"
         aria-hidden
       />
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-left">

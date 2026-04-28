@@ -18,7 +18,7 @@ export function ProjectMockVisual({
     >
       <div className="absolute inset-0 bg-grid-fine opacity-35" aria-hidden />
       <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-500/8 via-transparent to-violet-500/8"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-neon-lime/8 via-transparent to-violet-500/8"
         aria-hidden
       />
       {variant === "crm" && <MockCrm />}
@@ -52,7 +52,7 @@ function MockCrm() {
                 key={t}
                 className={cn(
                   "rounded-md px-1.5 py-1 text-[8px] text-zinc-500",
-                  i === 0 && "bg-cyan-500/10 text-cyan-200",
+                  i === 0 && "bg-neon-lime/10 text-neon-lime/90",
                 )}
               >
                 {t}
@@ -78,16 +78,16 @@ function MockCrm() {
               </div>
             ))}
           </div>
-          <div className="h-16 rounded-lg border border-cyan-500/20 bg-gradient-to-t from-cyan-500/10 to-transparent p-1.5 sm:h-[4.5rem]">
+          <div className="h-16 rounded-lg border border-neon-lime/20 bg-gradient-to-t from-neon-lime/10 to-transparent p-1.5 sm:h-[4.5rem]">
             <div className="mb-0.5 flex items-center justify-between text-[7px] text-zinc-500 sm:text-[8px]">
               <span>Performance</span>
-              <span className="font-mono text-cyan-300/90">+12%</span>
+              <span className="font-mono text-neon-lime/90">+12%</span>
             </div>
             <div className="flex h-[calc(100%-0.75rem)] items-end gap-px sm:gap-0.5">
               {[40, 70, 45, 80, 55, 90, 60, 75].map((h, i) => (
                 <div
                   key={i}
-                  className="flex-1 rounded-sm bg-gradient-to-t from-cyan-500/60 to-cyan-300/20"
+                  className="flex-1 rounded-sm bg-gradient-to-t from-neon-lime/60 to-neon-lime/20"
                   style={{ height: `${h}%` }}
                 />
               ))}
@@ -126,7 +126,7 @@ function MockCms() {
           <div className="col-span-2 rounded-lg border border-white/10 bg-white/[0.03] p-1.5 sm:col-span-1">
             <p className="text-[7px] text-zinc-500 sm:text-[8px]">Storage</p>
             <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-              <div className="h-full w-[62%] rounded-full bg-cyan-500/70" />
+              <div className="h-full w-[62%] rounded-full bg-neon-lime/70" />
             </div>
           </div>
         </div>
@@ -145,7 +145,7 @@ function MockCms() {
               <span className="w-1/4 truncate">Launch notes {i}</span>
               <span className="w-1/3 text-emerald-300/90">Published</span>
               <span className="w-1/3 truncate font-mono">t{i}.app</span>
-              <span className="w-1/6 text-right text-cyan-300/80">98</span>
+              <span className="w-1/6 text-right text-neon-lime/80">98</span>
             </div>
           ))}
         </div>
@@ -168,7 +168,7 @@ function MockMobile() {
     <div className="relative p-3 sm:p-4">
       <div className="mb-2 flex items-center justify-between text-[8px] text-zinc-500 sm:text-[9px]">
         <span>Mobile product · preview</span>
-        <span className="font-mono text-cyan-400/80">Flutter</span>
+        <span className="font-mono text-neon-lime/80">Flutter</span>
       </div>
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
@@ -187,8 +187,8 @@ function MockMobile() {
               </p>
               <div className="mt-1.5 space-y-1">
                 <div className="h-1.5 w-full rounded bg-white/10" />
-                <div className="h-1.5 w-[80%] rounded bg-cyan-500/30" />
-                <div className="mt-2 h-8 rounded border border-cyan-500/15 bg-gradient-to-br from-cyan-500/10 to-transparent" />
+                <div className="h-1.5 w-[80%] rounded bg-neon-lime/30" />
+                <div className="mt-2 h-8 rounded border border-neon-lime/15 bg-gradient-to-br from-neon-lime/10 to-transparent" />
               </div>
               <p className="mt-1.5 text-[6px] text-zinc-600 sm:text-[7px]">{s.sub}</p>
             </div>

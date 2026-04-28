@@ -11,6 +11,8 @@ type RevealProps = {
   delay?: number;
   y?: number;
   once?: boolean;
+  /** If true, render immediately (no opacity-0 on first paint). */
+  eager?: boolean;
 };
 
 export function Reveal({
@@ -19,10 +21,11 @@ export function Reveal({
   delay = 0,
   y = 18,
   once = true,
+  eager = false,
 }: RevealProps) {
   const reduce = useReducedMotion();
 
-  if (reduce) {
+  if (reduce || eager) {
     return <div className={className}>{children}</div>;
   }
 

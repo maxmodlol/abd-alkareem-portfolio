@@ -39,6 +39,10 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        neon: {
+          lime: "#dfff00",
+          purple: "#bf00ff",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -48,6 +52,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+        display: ["var(--font-display)", "var(--font-geist-sans)", "system-ui"],
       },
       keyframes: {
         "grid-drift": {
@@ -82,6 +87,17 @@ const config: Config = {
           "0%, 100%": { opacity: "0.4" },
           "50%": { opacity: "0.9" },
         },
+        "wave-slide": {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        "orb-morph": {
+          "0%, 100%": { borderRadius: "60% 40% 30% 70% / 60% 30% 70% 40%" },
+          "50%": { borderRadius: "30% 60% 70% 40% / 50% 60% 30% 60%" },
+        },
+        "spin-slow": {
+          to: { transform: "rotate(360deg)" },
+        },
       },
       animation: {
         "grid-drift": "grid-drift 40s linear infinite",
@@ -92,12 +108,17 @@ const config: Config = {
         scanline: "scanline 8s linear infinite",
         shimmer: "shimmer 8s linear infinite",
         "border-glow": "border-glow 5s ease-in-out infinite",
+        "wave-slide": "wave-slide 12s linear infinite",
+        "orb-morph": "orb-morph 8s ease-in-out infinite",
+        "spin-slow": "spin-slow 60s linear infinite",
       },
       backgroundImage: {
         "gradient-radial-hero":
-          "radial-gradient(ellipse 100% 80% at 50% -20%, rgba(6, 182, 212, 0.18), transparent 55%)",
+          "radial-gradient(ellipse 100% 80% at 50% -20%, rgba(191, 0, 255, 0.15), transparent 55%)",
         "gradient-mesh":
-          "radial-gradient(at 20% 20%, rgba(6, 182, 212, 0.12) 0px, transparent 50%), radial-gradient(at 80% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 45%)",
+          "radial-gradient(at 20% 20%, rgba(223, 255, 0, 0.08) 0px, transparent 50%), radial-gradient(at 80% 0%, rgba(191, 0, 255, 0.12) 0px, transparent 45%)",
+        "gradient-neon-bloom":
+          "radial-gradient(ellipse 80% 50% at 50% 100%, rgba(191,0,255,0.2), transparent 50%), radial-gradient(ellipse 60% 40% at 20% 30%, rgba(223,255,0,0.06), transparent 45%)",
       },
     },
   },

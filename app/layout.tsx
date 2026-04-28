@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Syne } from "next/font/google";
 
 import { getSiteUrl } from "@/lib/site";
 
@@ -15,6 +15,13 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
   display: "swap",
+});
+
+const syne = Syne({
+  variable: "--font-display",
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["500", "600", "700", "800"],
 });
 
 const siteName = "Abd Alkareem Abu-Alsoud";
@@ -69,7 +76,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#09090b",
+  themeColor: "#030303",
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
@@ -83,7 +90,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen font-sans`}
+        className={`${inter.variable} ${jetbrainsMono.variable} ${syne.variable} min-h-screen font-sans`}
       >
         {children}
       </body>

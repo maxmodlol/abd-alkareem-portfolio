@@ -93,12 +93,12 @@ export function SkillsSection() {
                         className={cn(
                           "group h-full border-white/[0.1] bg-zinc-950/50 transition",
                           "shadow-[0_0_0_1px_rgba(6,182,212,0.06),0_16px_40px_-20px_rgba(0,0,0,0.6)]",
-                          "hover:border-cyan-500/20 hover:shadow-[0_0_0_1px_rgba(6,182,212,0.12),0_20px_50px_-20px_rgba(0,0,0,0.72)]",
+                          "hover:border-neon-lime/20 hover:shadow-[0_0_0_1px_rgba(223,255,0,0.12),0_20px_50px_-20px_rgba(0,0,0,0.72)]",
                         )}
                       >
                         <CardHeader className="flex flex-row items-center gap-3 space-y-0 pb-2">
                           <div
-                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/20 to-violet-500/10 text-cyan-200 shadow-[0_0_24px_rgba(6,182,212,0.2)]"
+                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-neon-lime/25 bg-gradient-to-br from-neon-lime/20 to-neon-purple/10 text-neon-lime/90 shadow-[0_0_24px_rgba(223,255,0,0.15)]"
                             aria-hidden
                           >
                             <Icon className="h-5 w-5" />

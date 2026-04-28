@@ -14,7 +14,7 @@ export function ContactSection() {
   const my = useMotionValue(0.4);
   const smx = useSpring(mx, { stiffness: 30, damping: 22 });
   const smy = useSpring(my, { stiffness: 30, damping: 22 });
-  const glow = useMotionTemplate`radial-gradient(800px 420px at ${smx} ${smy}, rgba(6, 182, 212, 0.2), transparent 60%)`;
+  const glow = useMotionTemplate`radial-gradient(800px 420px at ${smx} ${smy}, rgba(191, 0, 255, 0.2), transparent 60%)`;
 
   const onMove = (e: React.MouseEvent) => {
     if (reduce || !ref.current) return;
@@ -29,13 +29,13 @@ export function ContactSection() {
       className="relative scroll-mt-28 overflow-hidden border-b border-white/[0.07] px-4 py-20 sm:px-6 sm:py-28"
     >
       <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-violet-500/[0.06] via-cyan-500/[0.04] to-transparent"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-neon-purple/[0.07] via-neon-lime/[0.04] to-transparent"
         aria-hidden
       />
       <div
         ref={ref}
         onMouseMove={onMove}
-        className="hero-border-shimmer relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-white/[0.1] bg-zinc-950/50 px-5 py-12 text-center shadow-[0_0_0_1px_rgba(6,182,212,0.1),0_30px_60px_-30px_rgba(0,0,0,0.75),0_0_80px_-20px_rgba(99,102,241,0.12)] backdrop-blur-xl sm:px-10 sm:py-16"
+        className="hero-border-shimmer relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-white/[0.1] bg-zinc-950/50 px-5 py-12 text-center shadow-[0_0_0_1px_rgba(223,255,0,0.1),0_30px_60px_-30px_rgba(0,0,0,0.75),0_0_80px_-20px_rgba(191,0,255,0.12)] backdrop-blur-xl sm:px-10 sm:py-16"
       >
         {!reduce && (
           <motion.div
@@ -52,7 +52,7 @@ export function ContactSection() {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "linear-gradient(120deg, rgba(255,255,255,0.04) 0%, transparent 40%, rgba(6,182,212,0.04) 100%)",
+              "linear-gradient(120deg, rgba(255,255,255,0.04) 0%, transparent 40%, rgba(223,255,0,0.04) 100%)",
             mixBlendMode: "screen",
             opacity: 0.4,
           }}
@@ -64,7 +64,7 @@ export function ContactSection() {
           </h2>
         </Reveal>
         <div
-          className="relative mx-auto mt-6 h-px max-w-md bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent"
+          className="relative mx-auto mt-6 h-px max-w-md bg-gradient-to-r from-transparent via-neon-lime/50 to-transparent"
           aria-hidden
         />
         <Reveal delay={0.06} className="relative mt-6">
@@ -78,7 +78,7 @@ export function ContactSection() {
           <Button
             asChild
             size="lg"
-            className="bg-cyan-500 text-zinc-950 shadow-[0_0_40px_rgba(6,182,212,0.35)] hover:bg-cyan-400"
+            className="bg-neon-lime text-zinc-950 shadow-[0_0_40px_rgba(223,255,0,0.3)] hover:bg-neon-lime/90"
           >
             <a href="mailto:kareemabualsoud8@gmail.com">
               <Mail className="h-4 w-4" />

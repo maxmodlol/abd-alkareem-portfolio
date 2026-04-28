@@ -68,7 +68,7 @@ export function ProjectsSection() {
   return (
     <SectionShell id="projects" className="relative" tone="hero">
       <div
-        className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-transparent via-cyan-500/[0.04] to-transparent"
+        className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-transparent via-neon-lime/[0.04] to-transparent"
         aria-hidden
       />
       <div className="px-4 py-20 sm:px-6 sm:py-24 lg:py-28">
@@ -92,8 +92,8 @@ export function ProjectsSection() {
                       className={cn(
                         "group relative flex h-full min-h-full flex-col overflow-hidden rounded-2xl",
                         "border border-white/[0.1] bg-zinc-950/55 shadow-[0_0_0_1px_rgba(6,182,212,0.07),0_24px_60px_-28px_rgba(0,0,0,0.75)] backdrop-blur-md",
-                        "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-gradient-to-br before:from-cyan-500/8 before:via-transparent before:to-violet-500/6 before:opacity-0 before:transition before:duration-500 group-hover:before:opacity-100",
-                        "hover:border-cyan-500/25 hover:shadow-[0_0_0_1px_rgba(6,182,212,0.15),0_32px_64px_-32px_rgba(0,0,0,0.85)]",
+                        "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-gradient-to-br before:from-neon-lime/8 before:via-transparent before:to-neon-purple/6 before:opacity-0 before:transition before:duration-500 group-hover:before:opacity-100",
+                        "hover:border-neon-lime/25 hover:shadow-[0_0_0_1px_rgba(223,255,0,0.12),0_32px_64px_-32px_rgba(0,0,0,0.85)]",
                       )}
                     >
                       <div className="relative aspect-[16/11] w-full min-h-[160px] sm:min-h-[180px]">
@@ -115,13 +115,13 @@ export function ProjectsSection() {
                         />
                         <Badge
                           variant="tech"
-                          className="absolute left-3 top-3 border-cyan-500/25 bg-zinc-950/80 text-[10px] text-cyan-200/90 backdrop-blur"
+                          className="absolute left-3 top-3 border-neon-lime/25 bg-zinc-950/80 text-[10px] text-neon-lime/90 backdrop-blur"
                         >
                           {p.category}
                         </Badge>
                         <a
                           href="#contact"
-                          className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-lg border border-white/12 bg-zinc-950/80 text-zinc-400 backdrop-blur transition hover:border-cyan-500/30 hover:text-cyan-200"
+                          className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-lg border border-white/12 bg-zinc-950/80 text-zinc-400 backdrop-blur transition hover:border-neon-lime/30 hover:text-neon-lime"
                           aria-label="Get in touch"
                         >
                           <ExternalLink className="h-3.5 w-3.5" />

@@ -6,15 +6,15 @@ import { TiltCard3D } from "@/components/visual/tilt-card-3d";
 import { cn } from "@/lib/utils";
 
 const highlights = [
-  { label: "3+ Years Experience", tone: "cyan" as const },
+  { label: "3+ Years Experience", tone: "lime" as const },
   { label: "SaaS / CRM / APIs", tone: "violet" as const },
   { label: "Web + Mobile Products", tone: "emerald" as const },
   { label: "Remote & Relocation", tone: "sky" as const },
 ] as const;
 
 const toneLine = {
-  cyan: "from-cyan-500/50 to-cyan-500/0",
-  violet: "from-violet-500/50 to-violet-500/0",
+  lime: "from-neon-lime/50 to-neon-lime/0",
+  violet: "from-neon-purple/50 to-neon-purple/0",
   emerald: "from-emerald-500/50 to-emerald-500/0",
   sky: "from-sky-500/50 to-sky-500/0",
 } as const;
@@ -59,13 +59,13 @@ export function AboutSection() {
               <TiltCard3D max={4} className="h-full">
                 <Card
                   className={cn(
-                    "h-full overflow-hidden border-cyan-500/15 bg-zinc-950/60",
-                    "bg-gradient-to-br from-cyan-500/5 via-zinc-950/80 to-violet-500/5",
-                    "shadow-[0_0_0_1px_rgba(6,182,212,0.1),0_24px_50px_-28px_rgba(0,0,0,0.7)]",
+                    "h-full overflow-hidden border-neon-lime/15 bg-zinc-950/60",
+                    "bg-gradient-to-br from-neon-lime/5 via-zinc-950/80 to-neon-purple/5",
+                    "shadow-[0_0_0_1px_rgba(223,255,0,0.1),0_24px_50px_-28px_rgba(0,0,0,0.7)]",
                   )}
                 >
                   <CardHeader className="border-b border-white/8 pb-3">
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/90">
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-neon-lime/90">
                       Engineering focus
                     </p>
                     <CardTitle className="text-lg sm:text-xl">
@@ -103,7 +103,7 @@ export function AboutSection() {
                     <Card
                       className={cn(
                         "relative h-full overflow-hidden border-white/[0.08] bg-zinc-950/60",
-                        "hover:border-cyan-500/20",
+                        "hover:border-neon-lime/20",
                       )}
                     >
                       <div

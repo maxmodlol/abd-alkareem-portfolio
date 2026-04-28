@@ -15,7 +15,7 @@ const products = [
       "A mobile-first event planning and booking system for managing reservations, user requests, event details, and booking flows.",
     focus: "Booking flow, user management, admin workflows, notifications, real-time data.",
     tech: ["Flutter", "Firebase", "MongoDB", "REST APIs"],
-    tone: "cyan" as const,
+    tone: "lime" as const,
     icon: Calendar,
     visual: <VisualEvent />,
   },
@@ -54,7 +54,7 @@ const products = [
 ];
 
 const toneMap = {
-  cyan: "from-cyan-500/25 via-cyan-500/5 to-transparent",
+  lime: "from-neon-lime/25 via-neon-lime/5 to-transparent",
   violet: "from-violet-500/25 via-violet-500/5 to-transparent",
   emerald: "from-emerald-500/25 via-emerald-500/5 to-transparent",
   sky: "from-sky-500/25 via-sky-500/5 to-transparent",
@@ -66,10 +66,10 @@ function VisualEvent() {
       {["Fri 12", "Sat 13", "Sun 14"].map((d) => (
         <div
           key={d}
-          className="rounded border border-cyan-500/20 bg-zinc-950/80 p-1.5 text-center"
+          className="rounded border border-neon-lime/20 bg-zinc-950/80 p-1.5 text-center"
         >
-          <p className="text-[7px] text-cyan-300/90">{d}</p>
-          <div className="mx-auto mt-1 h-1 w-6 rounded bg-cyan-500/50" />
+          <p className="text-[7px] text-neon-lime/90">{d}</p>
+          <div className="mx-auto mt-1 h-1 w-6 rounded bg-neon-lime/50" />
         </div>
       ))}
     </div>
@@ -147,7 +147,7 @@ export function FreelanceSection() {
                       <Card
                         className={cn(
                           "h-full overflow-hidden border-white/[0.1] bg-zinc-950/55",
-                          "shadow-[0_0_0_1px_rgba(6,182,212,0.05),0_24px_50px_-24px_rgba(0,0,0,0.65)]",
+                          "shadow-[0_0_0_1px_rgba(223,255,0,0.05),0_24px_50px_-24px_rgba(0,0,0,0.65)]",
                         )}
                       >
                         <div
@@ -160,7 +160,7 @@ export function FreelanceSection() {
                           <div className="relative flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-widest text-zinc-500">
-                                <Icon className="h-3 w-3 text-cyan-400/80" />
+                                <Icon className="h-3 w-3 text-neon-lime/80" />
                                 Product module
                               </p>
                               <p className="mt-1.5 line-clamp-2 text-sm font-medium leading-snug text-zinc-100">

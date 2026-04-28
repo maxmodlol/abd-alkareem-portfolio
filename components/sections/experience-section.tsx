@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Reveal } from "@/components/visual/reveal";
 import { SectionHeading } from "@/components/visual/section-heading";
 import { SectionShell } from "@/components/visual/section-shell";
 import { TiltCard3D } from "@/components/visual/tilt-card-3d";
@@ -93,76 +92,74 @@ export function ExperienceSection() {
     <SectionShell id="experience" tone="deep">
       <div className="px-4 py-20 sm:px-6 sm:py-24">
         <div className="mx-auto max-w-6xl">
-          <Reveal>
+          <div>
             <SectionHeading
               eyebrow="Track record"
               title="Experience"
               titlePrefix
               description="Production work across CRM platforms, multi-tenant systems, and business-critical backends."
             />
-          </Reveal>
+          </div>
           <div className="relative mt-12 sm:pl-10">
             <div
               className="absolute left-[15px] top-3 h-[calc(100%-0.5rem)] w-px sm:left-[23px]"
               style={{
                 background:
-                  "linear-gradient(180deg, rgba(6, 182, 212, 0.55) 0%, rgba(99, 102, 241, 0.25) 50%, rgba(6, 182, 212, 0.15) 100%)",
-                boxShadow: "0 0 32px rgba(6, 182, 212, 0.25)",
+                  "linear-gradient(180deg, rgba(223, 255, 0, 0.45) 0%, rgba(191, 0, 255, 0.25) 50%, rgba(223, 255, 0, 0.12) 100%)",
+                boxShadow: "0 0 32px rgba(191, 0, 255, 0.2)",
               }}
               aria-hidden
             />
             <ol className="space-y-10">
-              {experiences.map((exp, i) => (
+              {experiences.map((exp) => (
                 <li key={exp.org + exp.date} className="relative pl-9 sm:pl-12">
-                  <Reveal delay={0.04 * i}>
-                    <div
-                      className="absolute left-0 top-2 z-[1] flex h-7 w-7 items-center justify-center rounded-full border border-cyan-400/40 bg-zinc-950 shadow-[0_0_0_1px_rgba(6,182,212,0.35),0_0_20px_rgba(6,182,212,0.35)] sm:left-1.5"
-                      aria-hidden
-                    >
-                      <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
-                    </div>
-                    <TiltCard3D max={4} className="w-full">
-                      <Card className="border-white/[0.08] bg-zinc-950/50 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_20px_40px_-20px_rgba(0,0,0,0.55)] backdrop-blur">
-                        <CardHeader className="border-b border-white/[0.06] pb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                          <div>
-                            <p className="font-mono text-xs text-cyan-200/80 sm:text-sm">
-                              {exp.org}
-                            </p>
-                            <CardTitle className="mt-1.5 text-lg sm:text-xl">
-                              {exp.role}
-                            </CardTitle>
-                          </div>
-                          <p className="shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-xs text-zinc-400 sm:text-sm">
-                            {exp.date}
+                  <div
+                    className="absolute left-0 top-2 z-[1] flex h-7 w-7 items-center justify-center rounded-full border border-neon-lime/40 bg-zinc-950 shadow-[0_0_0_1px_rgba(223,255,0,0.3),0_0_20px_rgba(191,0,255,0.25)] sm:left-1.5"
+                    aria-hidden
+                  >
+                    <span className="h-2.5 w-2.5 rounded-full bg-neon-lime" />
+                  </div>
+                  <TiltCard3D max={4} className="w-full">
+                    <Card className="border-white/[0.08] bg-zinc-950/50 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_20px_40px_-20px_rgba(0,0,0,0.55)] backdrop-blur">
+                      <CardHeader className="border-b border-white/[0.06] pb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                        <div>
+                          <p className="font-mono text-xs text-neon-lime/85 sm:text-sm">
+                            {exp.org}
                           </p>
-                        </CardHeader>
-                        <CardContent className="space-y-4 pt-5">
-                          <ul className="space-y-2.5 text-sm leading-relaxed text-zinc-400">
-                            {exp.bullets.map((b) => (
-                              <li key={b} className="flex gap-2.5">
-                                <span
-                                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-500/80 ring-1 ring-cyan-400/30"
-                                  aria-hidden
-                                />
-                                <span className="min-w-0 flex-1">{b}</span>
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="flex flex-wrap gap-1.5">
-                            {exp.tech.map((t) => (
-                              <Badge
-                                key={t}
-                                variant="tech"
-                                className="text-[10px] font-normal sm:text-xs"
-                              >
-                                {t}
-                              </Badge>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TiltCard3D>
-                  </Reveal>
+                          <CardTitle className="mt-1.5 text-lg sm:text-xl">
+                            {exp.role}
+                          </CardTitle>
+                        </div>
+                        <p className="shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-xs text-zinc-400 sm:text-sm">
+                          {exp.date}
+                        </p>
+                      </CardHeader>
+                      <CardContent className="space-y-4 pt-5">
+                        <ul className="space-y-2.5 text-sm leading-relaxed text-zinc-400">
+                          {exp.bullets.map((b) => (
+                            <li key={b} className="flex gap-2.5">
+                              <span
+                                className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-neon-lime/80 ring-1 ring-neon-lime/30"
+                                aria-hidden
+                              />
+                              <span className="min-w-0 flex-1">{b}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="flex flex-wrap gap-1.5">
+                          {exp.tech.map((t) => (
+                            <Badge
+                              key={t}
+                              variant="tech"
+                              className="text-[10px] font-normal sm:text-xs"
+                            >
+                              {t}
+                            </Badge>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TiltCard3D>
                 </li>
               ))}
             </ol>

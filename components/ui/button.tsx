@@ -20,7 +20,7 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         glow:
-          "border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 shadow-[0_0_20px_rgba(34,211,238,0.15)] hover:border-cyan-400/50 hover:bg-cyan-500/20",
+          "border border-neon-lime/30 bg-neon-lime/10 text-zinc-100 shadow-[0_0_20px_rgba(223,255,0,0.15)] hover:border-neon-lime/50 hover:bg-neon-lime/20",
         subtle:
           "border border-white/10 bg-white/5 text-foreground hover:bg-white/10",
       },

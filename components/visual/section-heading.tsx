@@ -27,7 +27,7 @@ export function SectionHeading({
       )}
     >
       {eyebrow ? (
-        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan-400/80">
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-neon-lime/80">
           {eyebrow}
         </p>
       ) : null}
@@ -40,7 +40,7 @@ export function SectionHeading({
       >
         {titlePrefix ? (
           <span
-            className="inline-block h-8 w-1 shrink-0 rounded-full bg-gradient-to-b from-cyan-400 to-violet-500 shadow-[0_0_20px_rgba(6,182,212,0.35)]"
+            className="inline-block h-8 w-1 shrink-0 rounded-full bg-gradient-to-b from-neon-lime to-neon-purple shadow-[0_0_20px_rgba(223,255,0,0.3)]"
             aria-hidden
           />
         ) : null}

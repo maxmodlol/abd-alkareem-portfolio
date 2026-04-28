@@ -54,16 +54,16 @@ export function HowIWorkSection() {
                           "group relative h-full min-h-[9.5rem] overflow-hidden rounded-2xl border border-white/[0.1] p-5 sm:p-6",
                           "bg-gradient-to-br from-zinc-950/90 via-zinc-950/70 to-violet-950/20",
                           "shadow-[0_0_0_1px_rgba(6,182,212,0.08),0_20px_50px_-28px_rgba(0,0,0,0.65)]",
-                          "hover:border-cyan-500/25",
+                          "hover:border-neon-lime/25",
                         )}
                       >
                         <div
-                          className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-cyan-500/10 blur-3xl transition group-hover:bg-cyan-500/15"
+                          className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-neon-lime/10 blur-3xl transition group-hover:bg-neon-lime/15"
                           aria-hidden
                         />
                         <div className="flex items-start gap-3">
                           <div
-                            className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/15 to-violet-500/10 text-cyan-200 shadow-[0_0_24px_rgba(6,182,212,0.2)]"
+                            className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neon-lime/25 bg-gradient-to-br from-neon-lime/15 to-neon-purple/10 text-neon-lime/90 shadow-[0_0_24px_rgba(223,255,0,0.12)]"
                             aria-hidden
                           >
                             <Icon className="h-5 w-5" />
