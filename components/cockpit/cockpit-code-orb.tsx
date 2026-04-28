@@ -10,7 +10,7 @@ function CurrentVibeCard() {
   const reduce = useReducedMotion();
   const bars = 20;
   return (
-    <div className="pointer-events-none w-full max-w-[9.5rem] rounded-2xl border border-white/12 bg-zinc-950/85 p-2.5 shadow-[0_0_24px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md">
+    <div className="pointer-events-none w-full rounded-2xl border border-white/12 bg-zinc-950/85 p-2.5 shadow-[0_0_24px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md sm:max-w-[9.5rem]">
       <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.2em] text-zinc-400">
         Current vibe
       </p>
@@ -229,7 +229,7 @@ export function CockpitCodeOrb() {
       </div>
 
       {/* Mobile: same card, stacked under orb so it’s visible and on-layout */}
-      <div className="z-20 mt-4 flex justify-center sm:hidden">
+      <div className="z-20 mt-4 flex w-full justify-center px-1 sm:hidden">
         <CurrentVibeCard />
       </div>
     </div>

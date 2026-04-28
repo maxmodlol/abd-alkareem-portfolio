@@ -114,21 +114,27 @@ function CornerBrackets() {
 
 function CoreTerminal({
   lineCount,
+  lightweight,
   className,
 }: {
   lineCount: number;
+  lightweight?: boolean;
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        "hero-border-shimmer relative z-[1] w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-cyan-500/30 bg-zinc-950/85 p-2.5 shadow-[0_0_0_1px_rgba(6,182,212,0.2),0_0_40px_rgba(6,182,212,0.1),0_16px_40px_-16px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.07)] backdrop-blur-2xl sm:rounded-2xl sm:p-3",
+        "relative z-[1] w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-cyan-500/30 bg-zinc-950/85 p-2.5 shadow-[0_0_0_1px_rgba(6,182,212,0.2),0_0_40px_rgba(6,182,212,0.1),0_16px_40px_-16px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.07)] backdrop-blur-2xl sm:rounded-2xl sm:p-3",
+        !lightweight && "hero-border-shimmer",
         className,
       )}
     >
       <div className="pointer-events-none absolute inset-0 bg-scanlines opacity-[0.1]" />
       <div
-        className="hero-scan-sweep pointer-events-none absolute inset-0 opacity-30"
+        className={cn(
+          "pointer-events-none absolute inset-0 opacity-30",
+          !lightweight && "hero-scan-sweep",
+        )}
         aria-hidden
       />
       <CornerBrackets />
@@ -163,13 +169,13 @@ function CoreTerminal({
         ))}
       </div>
       <p className="relative z-10 mt-1.5 font-mono sm:mt-2" aria-hidden>
-        <span className="inline-block h-2.5 w-px animate-pulse bg-cyan-400" />
+        <span className={cn("inline-block h-2.5 w-px bg-cyan-400", !lightweight && "animate-pulse")} />
       </p>
     </div>
   );
 }
 
-function VisionHeader({ reduce }: { reduce: boolean }) {
+function VisionHeader({ reduce, lightweight }: { reduce: boolean; lightweight?: boolean }) {
   return (
     <div
       className="relative z-[2] mb-2 w-full text-left [perspective:800px] sm:mb-2.5"
@@ -179,11 +185,15 @@ function VisionHeader({ reduce }: { reduce: boolean }) {
         className="block w-full [transform-style:preserve-3d]"
         initial={false}
         animate={
-          reduce
+          reduce || lightweight
             ? { rotateX: 0 }
             : { rotateX: [0, 1.5, 0, -1, 0] }
         }
-        transition={{ duration: 10, repeat: reduce ? 0 : Infinity, ease: "easeInOut" }}
+        transition={{
+          duration: 10,
+          repeat: reduce || lightweight ? 0 : Infinity,
+          ease: "easeInOut",
+        }}
       >
         <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.16em] text-cyan-500/85 sm:mb-1.5 sm:text-[8.5px] sm:tracking-[0.18em]">
           Command core
@@ -228,9 +238,11 @@ function MechBackdrop() {
 
 function TiltLayer({
   children,
+  disabled,
   className,
 }: {
   children: React.ReactNode;
+  disabled?: boolean;
   className?: string;
 }) {
   const reduce = useReducedMotion();
@@ -254,7 +266,7 @@ function TiltLayer({
     ry.set(0);
   };
 
-  if (reduce) {
+  if (reduce || disabled) {
     return <div className={className}>{children}</div>;
   }
   return (
@@ -275,6 +287,7 @@ function TiltLayer({
  */
 export function HeroSystemScene() {
   const reduce = useReducedMotion();
+  const [lightweight, setLightweight] = React.useState(false);
   const lineCount = TERMINAL_LINES.length;
   const ref = React.useRef<HTMLDivElement>(null);
   const mx = useMotionValue(0.5);
@@ -284,11 +297,21 @@ export function HeroSystemScene() {
   const spotlight = useMotionTemplate`radial-gradient(560px 400px at ${smx} ${smy}, rgba(6, 182, 212, 0.12), transparent 50%)`;
 
   const onMove = (e: React.MouseEvent) => {
-    if (reduce || !ref.current) return;
+    if (reduce || lightweight || !ref.current) return;
     const r = ref.current.getBoundingClientRect();
     mx.set((e.clientX - r.left) / r.width);
     my.set((e.clientY - r.top) / r.height);
   };
+
+  React.useEffect(() => {
+    const media = window.matchMedia(
+      "(max-width: 1024px), (pointer: coarse), (hover: none)",
+    );
+    const apply = () => setLightweight(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
 
   return (
     <div
@@ -299,7 +322,7 @@ export function HeroSystemScene() {
     >
       <motion.div
         className="pointer-events-none absolute -inset-2 rounded-[1.5rem] blur-3xl sm:-inset-3"
-        style={{ background: reduce ? "none" : spotlight }}
+        style={{ background: reduce || lightweight ? "none" : spotlight }}
         aria-hidden
       />
       <MechBackdrop />
@@ -308,11 +331,11 @@ export function HeroSystemScene() {
         style={{ maskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, black, transparent)" }}
         aria-hidden
       />
-      <TiltLayer className="relative z-10 w-full [transform-style:preserve-3d]">
+      <TiltLayer disabled={lightweight} className="relative z-10 w-full [transform-style:preserve-3d]">
         <div className="mx-auto flex min-h-0 w-full max-w-lg flex-col items-stretch sm:max-w-md lg:max-w-none">
-          <VisionHeader reduce={Boolean(reduce)} />
+          <VisionHeader reduce={Boolean(reduce)} lightweight={lightweight} />
           <div className="w-full min-w-0 px-0.5 sm:px-0">
-            <CoreTerminal lineCount={lineCount} />
+            <CoreTerminal lineCount={lineCount} lightweight={lightweight} />
           </div>
           <div className="relative z-[2] mt-1.5 grid w-full min-h-0 grid-cols-2 gap-0.5 sm:mt-2 sm:grid-cols-3 sm:gap-1">
             {MODULES.map((m) => (

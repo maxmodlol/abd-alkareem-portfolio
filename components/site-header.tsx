@@ -197,11 +197,13 @@ export function SiteHeader() {
       <div
         id="mobile-nav"
         className={cn(
-          "mx-auto mt-2.5 max-w-[100rem] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-sm shadow-cyan-950/20 backdrop-blur-xl transition-all lg:hidden",
-          open ? "max-h-[480px] border opacity-100" : "max-h-0 border-0 opacity-0",
+          "mx-auto max-w-[100rem] origin-top overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 backdrop-blur-xl transition-all duration-250 ease-out lg:hidden",
+          open
+            ? "mt-2.5 max-h-[480px] translate-y-0 border-white/12 opacity-100 shadow-[0_12px_34px_-20px_rgba(6,182,212,0.28)]"
+            : "pointer-events-none mt-0 max-h-0 -translate-y-2 border-transparent opacity-0 shadow-none",
         )}
       >
-        <div className="from-cyan-500/5 to-transparent bg-gradient-to-br to-zinc-950/30 px-1.5 py-1.5">
+        <div className="from-cyan-500/6 to-transparent bg-gradient-to-br to-zinc-950/30 px-1.5 py-1.5">
           <nav className="flex flex-col gap-0.5 px-1" aria-label="Mobile">
             {nav.map((item) => {
               const id = item.href.replace("#", "");

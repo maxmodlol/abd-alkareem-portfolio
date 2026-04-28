@@ -93,8 +93,8 @@ export function HeroSection() {
         aria-hidden
       />
       <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-[100rem] flex-1 flex-col content-stretch justify-center gap-2 px-4 py-3 sm:gap-3 sm:px-5 sm:py-4 md:px-6 lg:h-full lg:max-h-full lg:grid lg:grid-cols-2 lg:items-stretch lg:gap-6 lg:px-8 lg:py-5 xl:gap-8 xl:px-10 2xl:px-12">
-        <div className="flex min-h-0 min-w-0 w-full max-w-none flex-col lg:h-full lg:min-h-0 lg:justify-between lg:gap-4 lg:pr-1">
-          <div className="space-y-1.5 sm:space-y-2.5 lg:space-y-3">
+        <div className="flex min-h-0 min-w-0 w-full max-w-none flex-col items-center text-center lg:h-full lg:min-h-0 lg:items-start lg:justify-between lg:gap-4 lg:pr-1 lg:text-left">
+          <div className="w-full space-y-1.5 sm:space-y-2.5 lg:max-w-none lg:space-y-3">
             <motion.div variants={item(0)} initial="hidden" animate="show">
               <HeroGlowBadge>
                 Open to remote &amp; relocation opportunities
@@ -110,7 +110,7 @@ export function HeroSection() {
               <span>engineer building SaaS platforms, APIs, and web/mobile products.</span>
             </motion.h1>
             <motion.div variants={item(0.24)} initial="hidden" animate="show" className="min-h-0">
-              <HeroSubheadlineTech className="text-sm leading-[1.65] text-zinc-400/95 sm:text-base sm:leading-[1.62] lg:line-clamp-none lg:max-w-none lg:text-[1.05rem] lg:leading-[1.6] xl:max-w-[48rem] xl:text-[1.1rem] 2xl:text-[1.12rem]" />
+              <HeroSubheadlineTech className="mx-auto w-full max-w-none text-sm leading-[1.65] text-zinc-400/95 sm:text-base sm:leading-[1.62] lg:mx-0 lg:line-clamp-none lg:max-w-none lg:text-[1.05rem] lg:leading-[1.6] xl:max-w-[48rem] xl:text-[1.1rem] 2xl:text-[1.12rem]" />
             </motion.div>
             <motion.div
               variants={item(0.12)}
@@ -118,21 +118,21 @@ export function HeroSection() {
               animate="show"
               className="pt-0"
             >
-              <HeroProofChips className="gap-1.5 sm:gap-2.5 [&>li>span]:px-3 [&>li>span]:py-1.5 [&>li>span]:text-[10px] sm:[&>li>span]:text-xs" />
+              <HeroProofChips className="justify-center gap-1.5 sm:gap-2.5 lg:justify-start [&>li>span]:px-3 [&>li>span]:py-1.5 [&>li>span]:text-[10px] sm:[&>li>span]:text-xs" />
             </motion.div>
           </div>
-          <div className="mt-4 space-y-2.5 sm:mt-5 lg:mt-0">
+          <div className="mt-4 w-full space-y-2.5 sm:mt-5 lg:mt-0 lg:max-w-none">
             <motion.div
               variants={item(0.16)}
               initial="hidden"
               animate="show"
-              className="flex flex-col gap-2 pt-0.5 sm:flex-row sm:flex-wrap sm:items-center"
+              className="flex w-full flex-col items-center gap-2 pt-0.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center lg:justify-start"
             >
               <Button
                 asChild
                 size="default"
                 className={cn(
-                  "h-10 border-0 bg-gradient-to-r from-cyan-500 via-cyan-400 to-violet-600 px-5 text-sm text-zinc-950 sm:h-11 sm:px-6 sm:text-base",
+                  "h-10 w-full border-0 bg-gradient-to-r from-cyan-500 via-cyan-400 to-violet-600 px-5 text-sm text-zinc-950 sm:h-11 sm:w-auto sm:px-6 sm:text-base",
                   "shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_0_32px_rgba(6,182,212,0.22)]",
                   "transition hover:brightness-110",
                 )}
@@ -146,7 +146,7 @@ export function HeroSection() {
                 asChild
                 size="default"
                 variant="subtle"
-                className="h-10 border border-cyan-500/20 bg-white/[0.04] px-5 text-sm text-zinc-100 shadow-[0_0_20px_rgba(6,182,212,0.06)] backdrop-blur-sm hover:border-cyan-500/30 hover:bg-white/[0.08] sm:h-11 sm:px-6 sm:text-base"
+                className="h-10 w-full border border-cyan-500/20 bg-white/[0.04] px-5 text-sm text-zinc-100 shadow-[0_0_20px_rgba(6,182,212,0.06)] backdrop-blur-sm hover:border-cyan-500/30 hover:bg-white/[0.08] sm:h-11 sm:w-auto sm:px-6 sm:text-base"
               >
                 <a href="#contact" className="inline-flex items-center gap-2">
                   <Mail className="h-4 w-4 text-cyan-300/80 sm:h-5 sm:w-5" />
@@ -157,7 +157,7 @@ export function HeroSection() {
                 asChild
                 size="default"
                 variant="subtle"
-                className="h-10 border border-white/12 bg-white/[0.03] px-5 text-sm text-zinc-200 sm:h-11 sm:px-6 sm:text-base"
+                className="h-10 w-full border border-white/12 bg-white/[0.03] px-5 text-sm text-zinc-200 sm:h-11 sm:w-auto sm:px-6 sm:text-base"
               >
                 <a
                   href="/cv.pdf"
@@ -173,7 +173,7 @@ export function HeroSection() {
               variants={item(0.2)}
               initial="hidden"
               animate="show"
-              className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs leading-normal text-zinc-500/95 sm:gap-x-2.5"
+              className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-xs leading-normal text-zinc-500/95 sm:gap-x-2.5 lg:justify-start"
             >
               <span className="inline-flex items-center gap-1.5">
                 <span
@@ -207,22 +207,22 @@ export function HeroSection() {
 
 function HeroLeftStatic() {
   return (
-    <div className="flex min-h-0 min-w-0 w-full max-w-none flex-col lg:h-full lg:min-h-0 lg:justify-between lg:gap-4 lg:pr-1">
-      <div className="space-y-1.5 sm:space-y-2.5 lg:space-y-3">
+    <div className="flex min-h-0 min-w-0 w-full max-w-none flex-col items-center text-center lg:h-full lg:min-h-0 lg:items-start lg:justify-between lg:gap-4 lg:pr-1 lg:text-left">
+      <div className="w-full space-y-1.5 sm:space-y-2.5 lg:max-w-none lg:space-y-3">
         <HeroGlowBadge>Open to remote &amp; relocation opportunities</HeroGlowBadge>
         <h1 className="text-balance text-[1.45rem] font-semibold leading-[1.1] text-zinc-50 sm:text-[1.5rem] md:text-[1.65rem] lg:text-[1.85rem] xl:text-[2rem] 2xl:text-[2.1rem]">
           <span className="text-gradient">Backend-leaning full-stack</span>{" "}
           <span>engineer building SaaS platforms, APIs, and web/mobile products.</span>
         </h1>
-        <HeroSubheadlineTech className="text-sm leading-[1.65] sm:text-base sm:leading-[1.62] lg:max-w-none lg:text-[1.05rem] xl:max-w-[48rem] xl:text-[1.1rem] 2xl:text-[1.12rem]" />
-        <HeroProofChips className="gap-1.5 sm:gap-2.5 [&>li>span]:px-3 [&>li>span]:py-1.5 [&>li>span]:text-[10px] sm:[&>li>span]:text-xs" />
+        <HeroSubheadlineTech className="mx-auto w-full max-w-none text-sm leading-[1.65] sm:text-base sm:leading-[1.62] lg:mx-0 lg:max-w-none lg:text-[1.05rem] xl:max-w-[48rem] xl:text-[1.1rem] 2xl:text-[1.12rem]" />
+        <HeroProofChips className="justify-center gap-1.5 sm:gap-2.5 lg:justify-start [&>li>span]:px-3 [&>li>span]:py-1.5 [&>li>span]:text-[10px] sm:[&>li>span]:text-xs" />
       </div>
-      <div className="mt-4 space-y-2.5 sm:mt-5 lg:mt-0">
-        <div className="flex flex-col gap-2 pt-0.5 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="mt-4 w-full space-y-2.5 sm:mt-5 lg:mt-0 lg:max-w-none">
+        <div className="flex w-full flex-col items-center gap-2 pt-0.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center lg:justify-start">
           <Button
             asChild
             size="default"
-            className="h-10 border-0 bg-gradient-to-r from-cyan-500 to-violet-600 px-5 text-sm text-zinc-950 shadow-[0_0_32px_rgba(6,182,212,0.22)] hover:brightness-110 sm:h-11 sm:px-6 sm:text-base"
+            className="h-10 w-full border-0 bg-gradient-to-r from-cyan-500 to-violet-600 px-5 text-sm text-zinc-950 shadow-[0_0_32px_rgba(6,182,212,0.22)] hover:brightness-110 sm:h-11 sm:w-auto sm:px-6 sm:text-base"
           >
             <a href="#projects">
               View Projects
@@ -233,7 +233,7 @@ function HeroLeftStatic() {
             asChild
             size="default"
             variant="subtle"
-            className="h-10 border-cyan-500/20 px-5 text-sm sm:h-11 sm:px-6 sm:text-base"
+            className="h-10 w-full border-cyan-500/20 px-5 text-sm sm:h-11 sm:w-auto sm:px-6 sm:text-base"
           >
             <a href="#contact" className="inline-flex items-center gap-2">
               <Mail className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -244,7 +244,7 @@ function HeroLeftStatic() {
             asChild
             size="default"
             variant="subtle"
-            className="h-10 border-white/12 px-5 text-sm sm:h-11 sm:px-6 sm:text-base"
+            className="h-10 w-full border-white/12 px-5 text-sm sm:h-11 sm:w-auto sm:px-6 sm:text-base"
           >
             <a href="/cv.pdf" download className="inline-flex items-center gap-2">
               <Download className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -252,7 +252,7 @@ function HeroLeftStatic() {
             </a>
           </Button>
         </div>
-        <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+        <div className="flex flex-wrap justify-center gap-2 text-xs text-zinc-500 lg:justify-start">
           <span>🇵🇸 Palestine</span>
           <span>·</span>
           <span>Remote / relocation</span>

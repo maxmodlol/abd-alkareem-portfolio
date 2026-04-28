@@ -67,7 +67,7 @@ export function CockpitHero({ id = "overview" }: { id?: string }) {
   return (
     <header
       id={id}
-      className="relative flex w-full max-w-full flex-col scroll-mt-24 lg:max-w-none lg:scroll-mt-8"
+      className="relative flex w-full max-w-full flex-col items-center text-center scroll-mt-24 lg:max-w-none lg:items-start lg:text-left lg:scroll-mt-8"
     >
       <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-zinc-500 sm:text-[11px] sm:tracking-[0.32em] lg:text-xs lg:tracking-[0.28em] xl:text-[13px]">
         Abd Alkareem Abu-Alsoud
@@ -76,7 +76,7 @@ export function CockpitHero({ id = "overview" }: { id?: string }) {
         Full Stack Engineer
       </p>
 
-      <h1 className="mt-3.5 w-full max-w-[22rem] font-display text-[clamp(1.2rem,2.2vw+0.55rem,1.95rem)] font-extrabold leading-[1.05] tracking-tight text-zinc-50 sm:mt-4 sm:max-w-[28rem] lg:mt-5 lg:max-w-none lg:text-[clamp(1.5rem,1.35vw+0.85rem,2.15rem)] lg:leading-[1.08] xl:mt-6 xl:text-[clamp(1.65rem,1.25vw+0.9rem,2.75rem)]">
+      <h1 className="mt-3.5 w-full max-w-none font-display text-[clamp(1.2rem,2.2vw+0.55rem,1.95rem)] font-extrabold leading-[1.05] tracking-tight text-zinc-50 sm:mt-4 lg:mt-5 lg:max-w-none lg:text-[clamp(1.5rem,1.35vw+0.85rem,2.15rem)] lg:leading-[1.08] xl:mt-6 xl:text-[clamp(1.65rem,1.25vw+0.9rem,2.75rem)]">
         <span className="block">I BUILD DIGITAL</span>
         <span className="relative mt-1 inline-block sm:mt-1 lg:mt-1.5">
           <span
@@ -111,12 +111,12 @@ export function CockpitHero({ id = "overview" }: { id?: string }) {
         </span>
       </h1>
 
-      <p className="mt-4 max-w-md text-[13px] leading-relaxed text-zinc-400 sm:mt-5 sm:text-sm lg:mt-6 lg:max-w-none lg:text-base lg:leading-[1.65] xl:mt-7 xl:max-w-[40ch] xl:text-[1.05rem]">
+      <p className="mt-4 w-full max-w-none text-[13px] leading-relaxed text-zinc-400 sm:mt-5 sm:text-sm lg:mt-6 lg:max-w-none lg:text-base lg:leading-[1.65] xl:mt-7 xl:max-w-[40ch] xl:text-[1.05rem]">
         Crafting scalable systems, delightful interfaces and developer experiences
         from idea to infinity and beyond.
       </p>
 
-      <div className="mt-5 flex w-full min-w-0 max-w-md flex-col gap-3 sm:mt-6 sm:max-w-none sm:flex-row sm:items-stretch sm:gap-3.5 lg:mt-8 lg:gap-4">
+      <div className="mt-5 flex w-full min-w-0 max-w-none flex-col gap-3 sm:mt-6 sm:flex-row sm:items-stretch sm:gap-3.5 lg:mt-8 lg:gap-4">
         <LiquidButton
           href="#projects"
           variant="lime"
