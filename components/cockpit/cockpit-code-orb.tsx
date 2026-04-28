@@ -49,7 +49,19 @@ function CurrentVibeCard() {
 
 export function CockpitCodeOrb() {
   const reduce = useReducedMotion();
+  const [lightweight, setLightweight] = React.useState(false);
   const pathId = React.useId().replace(/:/g, "");
+  const disableMotion = reduce || lightweight;
+
+  React.useEffect(() => {
+    const media = window.matchMedia(
+      "(max-width: 768px), (pointer: coarse), (hover: none)",
+    );
+    const apply = () => setLightweight(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
 
   return (
     <div className="relative mx-auto w-full max-w-[min(100%,460px)] sm:max-w-lg lg:max-w-[min(100%,28rem)] xl:max-w-[min(100%,32rem)]">
@@ -65,11 +77,11 @@ export function CockpitCodeOrb() {
         />
 
         {/* Outer organic blobs */}
-        {!reduce && (
+        {!disableMotion && (
           <>
             <motion.div
               className="pointer-events-none absolute inset-[6%] rounded-[40%] border border-white/5 bg-gradient-to-br from-neon-purple/20 via-zinc-950/40 to-neon-lime/10 opacity-80 blur-[1px]"
-              animate={reduce ? undefined : { rotate: 360, scale: [1, 1.03, 1] }}
+              animate={disableMotion ? undefined : { rotate: 360, scale: [1, 1.03, 1] }}
               transition={{
                 rotate: { duration: 80, repeat: Infinity, ease: "linear" },
                 scale: { duration: 6, repeat: Infinity, ease: "easeInOut" },
@@ -78,7 +90,7 @@ export function CockpitCodeOrb() {
             <motion.div
               className="pointer-events-none absolute inset-[2%] rounded-[50%] border border-neon-lime/10"
               style={{ borderRadius: "45% 55% 50% 50% / 55% 50% 50% 45%" }}
-              animate={reduce ? undefined : { scale: [1, 1.04, 1] }}
+              animate={disableMotion ? undefined : { scale: [1, 1.04, 1] }}
               transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
             />
           </>
@@ -87,10 +99,10 @@ export function CockpitCodeOrb() {
         {/* Main glass mass */}
         <div className="relative h-[78%] w-[78%]">
           <div
-            className="absolute inset-0 motion-safe:animate-orb-morph"
+            className={`absolute inset-0 ${disableMotion ? "" : "motion-safe:animate-orb-morph"}`}
             style={{
               borderRadius: "55% 45% 48% 52% / 48% 55% 45% 52%",
-              willChange: "border-radius",
+              willChange: disableMotion ? "auto" : "border-radius",
               background: `
               linear-gradient(145deg, rgba(255,255,255,0.1) 0%, transparent 45%),
               linear-gradient(200deg, rgba(191,0,255,0.35) 0%, rgba(12,12,14,0.85) 50%, rgba(223,255,0,0.1) 100%)
@@ -117,7 +129,7 @@ export function CockpitCodeOrb() {
         </div>
 
         {/* Floating nodes + trails */}
-        {!reduce &&
+        {!disableMotion &&
           [
             { x: "12%", y: "18%", color: "lime" as const, delay: 0 },
             { x: "82%", y: "24%", color: "purple" as const, delay: 0.4 },
@@ -164,7 +176,7 @@ export function CockpitCodeOrb() {
               />
             </defs>
             <g>
-              {!reduce && (
+              {!disableMotion && (
                 <animateTransform
                   attributeName="transform"
                   type="rotate"
@@ -186,7 +198,7 @@ export function CockpitCodeOrb() {
           </svg>
         </div>
 
-        {!reduce && (
+        {!disableMotion && (
           <p className="sr-only" aria-live="polite">
             Abstract code orb: backend, frontend, cloud, design, systems
           </p>
@@ -196,7 +208,7 @@ export function CockpitCodeOrb() {
         <div className="absolute inset-0 z-10 flex items-center justify-center">
           <motion.div
             className="flex h-24 w-24 flex-col items-center justify-center rounded-full border border-white/20 bg-zinc-950/70 shadow-[0_0_32px_rgba(191,0,255,0.35),inset_0_0_20px_rgba(223,255,0,0.08)] backdrop-blur-md sm:h-28 sm:w-28"
-            animate={reduce ? undefined : { scale: [1, 1.04, 1] }}
+            animate={disableMotion ? undefined : { scale: [1, 1.04, 1] }}
             transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
           >
             <span className="font-mono text-2xl text-neon-purple [text-shadow:0_0_20px_rgba(191,0,255,0.7)] sm:text-3xl">
@@ -206,7 +218,7 @@ export function CockpitCodeOrb() {
         </div>
 
         {/* Particles (tiny) */}
-        {!reduce &&
+        {!disableMotion &&
           [0, 1, 2, 3, 4, 5].map((i) => (
             <motion.span
               key={`p-${i}`}
