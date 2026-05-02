@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Syne } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { getSiteUrl } from "@/lib/site";
@@ -94,6 +95,7 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} ${syne.variable} min-h-screen font-sans`}
       >
         {children}
+        <Analytics />
         <SpeedInsights />
       </body>
     </html>
