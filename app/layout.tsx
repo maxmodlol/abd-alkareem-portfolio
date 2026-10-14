@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono, Syne } from "next/font/google";
+import { Fragment_Mono, Gabarito, Hanken_Grotesk } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -7,23 +7,23 @@ import { getSiteUrl } from "@/lib/site";
 
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-geist-sans",
+const gabarito = Gabarito({
+  variable: "--font-gabarito",
   subsets: ["latin"],
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-geist-mono",
+const hanken = Hanken_Grotesk({
+  variable: "--font-hanken",
   subsets: ["latin"],
   display: "swap",
 });
 
-const syne = Syne({
-  variable: "--font-display",
+const fragmentMono = Fragment_Mono({
+  variable: "--font-fragment",
   subsets: ["latin"],
   display: "swap",
-  weight: ["500", "600", "700", "800"],
+  weight: "400",
 });
 
 const siteName = "Abd Alkareem Abu-Alsoud";
@@ -78,10 +78,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#030303",
-  colorScheme: "dark",
+  themeColor: "#0b3039",
+  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -90,10 +91,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${inter.variable} ${jetbrainsMono.variable} ${syne.variable} min-h-screen font-sans`}
-      >
+    <html lang="en">
+      <body className={`${gabarito.variable} ${hanken.variable} ${fragmentMono.variable}`}>
         {children}
         <Analytics />
         <SpeedInsights />

@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Abd Alkareem Abu-Alsoud — Full-Stack Software Engineer";
+export const alt = "Abd Alkareem Abu-Alsoud, Full-Stack Software Engineer";
 
 export const size = {
   width: 1200,
@@ -8,6 +8,8 @@ export const size = {
 };
 
 export const contentType = "image/png";
+
+const fontStack = "ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial";
 
 export default function OpenGraphImage() {
   return new ImageResponse(
@@ -18,64 +20,35 @@ export default function OpenGraphImage() {
           width: "100%",
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "center",
-          background: "#030303",
-          backgroundImage:
-            "linear-gradient(145deg, #030303 0%, #0c0a12 45%, #030303 100%)",
+          padding: "0 96px",
+          background: "linear-gradient(180deg, #0b3039 0%, #22838a 100%)",
         }}
       >
+        <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 28 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 14, background: "#f25c54" }} />
+          <span style={{ fontSize: 30, color: "#fff8ee", fontFamily: fontStack }}>
+            Abd Alkareem Abu-Alsoud
+          </span>
+        </div>
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 20,
-            marginBottom: 16,
+            fontSize: 92,
+            fontWeight: 800,
+            lineHeight: 1.02,
+            letterSpacing: "-0.03em",
+            color: "#fff8ee",
+            fontFamily: fontStack,
+            maxWidth: 900,
           }}
         >
-          <div
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: 14,
-              background: "#dfff00",
-              boxShadow: "0 0 48px rgba(223,255,0,0.35)",
-            }}
-          />
-          <span
-            style={{
-              fontSize: 52,
-              fontWeight: 800,
-              color: "#fafafa",
-              letterSpacing: "-0.03em",
-              fontFamily:
-                "ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial",
-            }}
-          >
-            Abd Alkareem
-          </span>
+          Products are cities. I build the plumbing.
         </div>
-        <p
-          style={{
-            fontSize: 26,
-            color: "#a1a1aa",
-            margin: 0,
-            fontFamily:
-              "ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial",
-          }}
-        >
-          Full-Stack Software Engineer
-        </p>
-        <p
-          style={{
-            marginTop: 28,
-            fontSize: 18,
-            color: "#71717a",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas",
-          }}
-        >
-          SaaS · APIs · CRM · Next.js
-        </p>
+        <div style={{ display: "flex", marginTop: 34, fontSize: 28, color: "#cfe9ea", fontFamily: fontStack }}>
+          Full-stack engineer. SaaS, CRM and mobile products.
+        </div>
       </div>
     ),
     {

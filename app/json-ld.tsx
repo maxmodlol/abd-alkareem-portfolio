@@ -7,7 +7,10 @@ const description =
 
 export function HomeJsonLd() {
   const url = getSiteUrl();
-  const sameAs = ["https://github.com/maxmodlol"] as const;
+  const sameAs = [
+    "https://github.com/maxmodlol",
+    "https://www.linkedin.com/in/abd-alkareem-abu-alsoud-843738227/",
+  ] as const;
   const image = `${url}/opengraph-image`;
   const json = {
     "@context": "https://schema.org",

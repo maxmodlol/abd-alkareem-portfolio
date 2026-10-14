@@ -1,41 +1,28 @@
-# Abd Alkareem Abu-Alsoud — Portfolio
+# Abd Alkareem Abu-Alsoud, portfolio
 
-A personal portfolio site: a dark, cinematic, product-focused presentation for a backend-leaning full-stack engineer. Built for international remote and relocation opportunities.
+A portfolio you explore instead of scroll: a small floating island city where every building is one of my products and every road is an API. Drag to turn the island, click a building to fly in. On phones the island fills the screen and the projects are a swipeable card deck.
 
-## Tech stack
+## Stack
 
-- [Next.js](https://nextjs.org/) (App Router)
-- [TypeScript](https://www.typescriptlang.org/)
-- [Tailwind CSS](https://tailwindcss.com/)
-- [shadcn/ui](https://ui.shadcn.com/)-style components (Button, Card, Badge, Separator, Tabs, Tooltip)
-- [Radix UI](https://www.radix-ui.com/) primitives
-- [Vercel](https://vercel.com/)-ready static deployment
+- [Next.js](https://nextjs.org/) (App Router), React 19, TypeScript
+- [three.js](https://threejs.org/) for the 3D scene
+- Plain CSS, with Gabarito, Hanken Grotesk and Fragment Mono through `next/font`
+- Deployed on [Vercel](https://vercel.com/)
 
-## How to run locally
+## Where things live
+
+- `lib/projects.ts`: the five products (VillageWellth, Sahefa, DIWAN, Oliva, Watan). The `id` of each project is also the key of its building in the scene.
+- `lib/content.ts`: experience, skills and contact links.
+- `components/city/city-scene.ts`: the three.js scene, camera rig and input.
+- `components/city/city-app.tsx`: the panel, tabs, phone deck and state.
+
+## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). Run `npm run build` for a production build.
 
-```bash
-npm run build
-```
-
-## Deployment
-
-Connect the repository to [Vercel](https://vercel.com/) and deploy. The app is static-content friendly and does not require a database.
-
-## CV (Download CV button)
-
-Place your PDF resume at:
-
-**`public/cv.pdf`**
-
-The **Download CV** button in the hero links to `/cv.pdf`. Without this file, the link will 404 until you add it.
-
-## License
-
-Private / personal use.
+Set `NEXT_PUBLIC_SITE_URL` in Vercel for correct Open Graph, sitemap and canonical URLs.
