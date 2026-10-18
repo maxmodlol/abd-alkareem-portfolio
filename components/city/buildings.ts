@@ -684,4 +684,120 @@ export function buildCarebooks(kit: Kit, folks: Folks, island: THREE.Group, labe
   return g;
 }
 
+/* ------------------------------------------------------------------ */
+/* Arvo: a fashion boutique with a lit window, a clothes rack, mannequins and a floating bundle.   */
+/* ------------------------------------------------------------------ */
+export function buildArvo(kit: Kit, folks: Folks, island: THREE.Group, label: string): THREE.Group {
+  const g = newGroup(island, "arvo", 9.0, -2.6);
+  const wall = kit.facade("#f1e4d4", { cols: 5, rows: 3, seed: 111, glass: "#e9d7c4", lit: 0.6, day: 0.3, night: 2.6, rough: 0.8 });
+  kit.box(g, 2.4, 1.6, 1.3, kit.sides(wall, kit.mat(0xd8c3a8)), 0, 0, -0.55);
+  kit.box(g, 2.55, 0.14, 1.45, kit.mat(0xb5654a, 0.8), 0, 1.6, -0.55);
+
+  /* the lit shop window, drawn as an interior */
+  const interior = canvasTex(512, 200, (c, w, h) => {
+    const bg = c.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, "#fff0dc");
+    bg.addColorStop(1, "#f1cfa2");
+    c.fillStyle = bg;
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = "#d9b98a";
+    c.fillRect(0, h * 0.82, w, h * 0.18);
+    const cols = ["#c8643b", "#2f4a5c", "#e9b86a", "#7a8f5a", "#f25c54", "#33475b", "#c9b6ff"];
+    c.fillStyle = "#33475b";
+    c.fillRect(20, h * 0.18, w - 40, 4);
+    for (let i = 0; i < 12; i++) {
+      const x = 34 + i * 38;
+      c.fillStyle = "#33475b";
+      c.fillRect(x + 12, h * 0.18, 2, 16);
+      c.fillStyle = cols[i % cols.length];
+      c.beginPath();
+      c.moveTo(x, h * 0.18 + 16);
+      c.lineTo(x + 26, h * 0.18 + 16);
+      c.lineTo(x + 34, h * 0.62);
+      c.lineTo(x - 8, h * 0.62);
+      c.closePath();
+      c.fill();
+    }
+    for (let i = 0; i < 7; i++) {
+      c.fillStyle = cols[(i + 2) % cols.length];
+      c.fillRect(30 + i * 62, h * 0.72, 54, 12);
+      c.fillStyle = cols[(i + 4) % cols.length];
+      c.fillRect(34 + i * 62, h * 0.72 - 11, 46, 11);
+    }
+  });
+  const interiorMat = new THREE.MeshStandardMaterial({ map: interior, emissiveMap: interior, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.6 });
+  kit.glows.push({ m: interiorMat, day: 0.5, night: 1.7 });
+  const shop = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.75), interiorMat);
+  shop.position.set(-0.35, 0.6, 0.105);
+  g.add(shop);
+  const glass = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.5, 0.75),
+    new THREE.MeshStandardMaterial({ color: 0xfff0dc, transparent: true, opacity: 0.16, roughness: 0.04, metalness: 0.4, depthWrite: false }),
+  );
+  glass.position.set(-0.35, 0.6, 0.12);
+  g.add(glass);
+  kit.box(g, 1.6, 0.06, 0.05, 0x1f1a1a, -0.35, 0.95, 0.115, false);
+  kit.box(g, 1.6, 0.06, 0.05, 0x1f1a1a, -0.35, 0.2, 0.115, false);
+  kit.box(g, 0.45, 0.85, 0.05, 0x1f1a1a, 0.82, 0, 0.12, false);
+
+  const sign = kit.sign(label, 1.3, 0.36, { fg: "#f3cfa0", bg: "#1f1a1a", day: 0.5, night: 2.6 });
+  sign.position.set(0, 1.28, 0.105);
+  g.add(sign);
+  for (let i = 0; i < 5; i++) {
+    const st = kit.box(g, 0.5, 0.05, 0.7, i % 2 ? CREAM : 0xc8643b, -1.0 + i * 0.5, 1.07, 0.1);
+    st.rotation.x = 0.3;
+  }
+
+  /* clothes rack, mannequins, bags */
+  const dark = kit.mat(0x1f1a1a, 0.5, 0.3);
+  kit.box(g, 0.03, 0.55, 0.03, dark, -0.95, 0, 0.8, false);
+  kit.box(g, 0.03, 0.55, 0.03, dark, -0.2, 0, 0.8, false);
+  kit.box(g, 0.78, 0.025, 0.025, dark, -0.575, 0.55, 0.8, false);
+  const garments = [0xc8643b, 0x2f4a5c, 0xe9b86a, 0x7a8f5a, 0xf25c54, 0xc9b6ff];
+  garments.forEach((c, i) => kit.box(g, 0.09, 0.26 + (i % 2) * 0.06, 0.05, c, -0.9 + i * 0.13, 0.27 - (i % 2) * 0.06, 0.8, false));
+  ([0.7, 1.05] as const).forEach((mx, i) => {
+    kit.cyl(g, 0.12, 0.14, 0.04, dark, mx, 0, 0.9, 12, false);
+    kit.cyl(g, 0.012, 0.012, 0.3, dark, mx, 0.04, 0.9, 6, false);
+    kit.cone(g, 0.12, 0.34, garments[(i + 2) % 6], mx, 0.2, 0.9, 12, true);
+    kit.box(g, 0.11, 0.16, 0.07, garments[(i + 2) % 6], mx, 0.46, 0.9, true);
+    kit.ball(g, 0.045, 0xf1d9c4, mx, 0.66, 0.9, 10, false);
+  });
+  [0xc8643b, 0x2f4a5c, 0xe9b86a].forEach((c, i) => kit.box(g, 0.14, 0.18, 0.08, c, 0.3 + i * 0.18, 0, 0.55, false));
+  kit.lamp(g, 1.1, 1.1, 1.0);
+  kit.pointLight(g, 0xffd9a0, 0.3, 1.4, 3, 0, 1.0, 0.7);
+
+  folks.person(g, "stand", -0.3, 0, 1.05, Math.PI, { prop: "bag" });
+  folks.person(g, "stand", -0.75, 0, 1.1, Math.PI * 0.95);
+  const shopper = folks.person(g, "walk", 0.2, 0, 1.0, 0, { prop: "bag" });
+  folks.walker(shopper, [[0.1, 0.45], [1.0, 0.45], [1.0, 1.15], [0.1, 1.15]], 0.3, 0.3, 0);
+
+  /* the bundle floating above the roof */
+  const bundle = new THREE.Group();
+  bundle.position.set(0, 3.0, -0.55);
+  g.add(bundle);
+  const boxM = kit.glowMat(0xf25c54, 0.9, 3, 0x3a1612);
+  const ribbon = kit.glowMat(0xffe9c4, 1.2, 3.6, 0x555040);
+  kit.box(bundle, 0.5, 0.5, 0.5, boxM, 0, -0.25, 0, false);
+  kit.box(bundle, 0.1, 0.52, 0.52, ribbon, 0, -0.26, 0, false);
+  kit.box(bundle, 0.52, 0.52, 0.1, ribbon, 0, -0.26, 0, false);
+  kit.ball(bundle, 0.09, ribbon, -0.09, 0.3, 0, 8, false);
+  kit.ball(bundle, 0.09, ribbon, 0.09, 0.3, 0, 8, false);
+  const items = [0xc8643b, 0x2f4a5c, 0xe9b86a].map((c) => {
+    const m = kit.box(bundle, 0.16, 0.2, 0.06, kit.glowMat(c, 0.7, 2.4, 0x222222), 0, 0, 0, false);
+    return m;
+  });
+  kit.hit(g, 2.8, 3.8, 2.8, 1.9, 0);
+
+  kit.anims.push((t) => {
+    bundle.position.y = 3.0 + Math.sin(t * 1.3) * 0.1;
+    bundle.rotation.y = t * 0.6;
+    items.forEach((m, i) => {
+      const a = t * 0.9 + (i * Math.PI * 2) / 3;
+      m.position.set(Math.cos(a) * 0.75, 0.15 + Math.sin(t * 1.5 + i) * 0.08, Math.sin(a) * 0.75);
+      m.rotation.y = -a;
+    });
+  });
+  return g;
+}
+
 export const BUILDING_ACCENT = { coral: CORAL, ink: INK };

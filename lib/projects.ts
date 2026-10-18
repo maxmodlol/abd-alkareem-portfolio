@@ -1,6 +1,6 @@
 export type Project = {
   /** Also the key of the matching building in the 3D scene. */
-  id: "villagewellth" | "sahefa" | "diwan" | "oliva" | "watan" | "carebooks";
+  id: "villagewellth" | "sahefa" | "diwan" | "oliva" | "watan" | "carebooks" | "arvo";
   /** Product name. */
   name: string;
   /** Short floating label on the island. */
@@ -67,5 +67,14 @@ export const projects: Project[] = [
     short: "Books for families of people with disabilities",
     text: "A CMS and online shop for publishing and buying books that help families and friends learn how to support people with disabilities.",
     stack: ["Angular", "Node.js"],
+  },
+  {
+    id: "arvo",
+    name: "Arvo",
+    tag: "Arvo",
+    kind: "Fashion and clothing shop",
+    short: "Pick a bundle or shop by fashion",
+    text: "An online clothing and fashion shop where customers build their own bundle, or simply shop by fashion.",
+    stack: ["Next.js", "Supabase"],
   },
 ];
