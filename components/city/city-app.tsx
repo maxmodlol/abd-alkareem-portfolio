@@ -22,6 +22,9 @@ export function CityApp() {
   const [selected, setSelected] = useState<BuildingId | null>(null);
   const [copied, setCopied] = useState(false);
   const [glOk, setGlOk] = useState(true);
+  const [night, setNight] = useState(false);
+  const [touring, setTouring] = useState(false);
+  const tourTimer = useRef(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
@@ -34,6 +37,11 @@ export function CityApp() {
   const progScroll = useRef(false);
   const deckTimer = useRef(0);
   const selectedRef = useRef<BuildingId | null>(null);
+
+  const stopTour = useCallback(() => {
+    window.clearInterval(tourTimer.current);
+    setTouring(false);
+  }, []);
 
   const goHome = useCallback((fromDeck?: boolean) => {
     fromDeckRef.current = fromDeck === true;
@@ -49,6 +57,7 @@ export function CityApp() {
 
   const openTab = useCallback(
     (t: Tab) => {
+      stopTour();
       if (t === "home") {
         goHome();
         return;
@@ -57,8 +66,33 @@ export function CityApp() {
       setSelected(null);
       setView(t);
     },
-    [goHome],
+    [goHome, stopTour],
   );
+
+  const pickManual = useCallback(
+    (id: BuildingId) => {
+      stopTour();
+      choose(id);
+    },
+    [choose, stopTour],
+  );
+
+  const startTour = () => {
+    window.clearInterval(tourTimer.current);
+    setTouring(true);
+    let i = 0;
+    const step = () => {
+      choose(projects[i % projects.length].id);
+      i += 1;
+    };
+    step();
+    tourTimer.current = window.setInterval(step, 5500);
+  };
+
+  useEffect(() => () => window.clearInterval(tourTimer.current), []);
+  useEffect(() => {
+    sceneRef.current?.setNight(night ? 1 : 0.38);
+  }, [night]);
 
   const scrollDeckTo = useCallback((idx: number, smooth: boolean) => {
     const deck = deckRef.current;
@@ -87,7 +121,7 @@ export function CityApp() {
         topH: topRef.current?.getBoundingClientRect().bottom ?? 0,
         deckTop: deckRef.current?.getBoundingClientRect().top ?? window.innerHeight,
       }),
-      onPick: (id) => choose(id),
+      onPick: (id) => pickManual(id),
       reduceMotion: reduce,
     });
     sceneRef.current = scene;
@@ -108,7 +142,7 @@ export function CityApp() {
       scene.dispose();
       sceneRef.current = null;
     };
-  }, [choose]);
+  }, [pickManual]);
 
   /* Keep the camera, the selection ring and the phone deck in step with the selection. */
   useEffect(() => {
@@ -174,6 +208,11 @@ export function CityApp() {
   return (
     <div className="city" data-gl={glOk ? "on" : "off"}>
       <canvas ref={canvasRef} id="scene" aria-hidden="true" />
+      <div className="bars" aria-hidden="true" />
+      <div className="intro" aria-hidden="true">
+        <span>{person.name}</span>
+        <b>Products are cities.</b>
+      </div>
 
       <div>
         {projects.map((p) => (
@@ -184,7 +223,7 @@ export function CityApp() {
             ref={(el) => {
               tagRefs.current[p.id] = el;
             }}
-            onClick={() => choose(p.id)}
+            onClick={() => pickManual(p.id)}
             aria-label={`Open ${p.name}, ${p.kind}`}
           >
             {p.tag}
@@ -197,6 +236,14 @@ export function CityApp() {
         <div className="mstat">
           <span className="dot" />
           Open to remote and relocation
+        </div>
+        <div className="mctl">
+          <button type="button" onClick={touring ? stopTour : startTour}>
+            {touring ? "Stop" : "Tour"}
+          </button>
+          <button type="button" aria-pressed={night} aria-label="Toggle night" onClick={() => setNight((v) => !v)}>
+            {night ? "Dusk" : "Night"}
+          </button>
         </div>
       </div>
 
@@ -232,13 +279,21 @@ export function CityApp() {
             <ul className="plist">
               {projects.map((p) => (
                 <li key={p.id}>
-                  <button type="button" onClick={() => choose(p.id)}>
+                  <button type="button" onClick={() => pickManual(p.id)}>
                     <b>{p.name}</b>
                     <span>{p.short}</span>
                   </button>
                 </li>
               ))}
             </ul>
+<div className="ctl">
+              <button className="pill" type="button" onClick={touring ? stopTour : startTour}>
+                {touring ? "Stop tour" : "Play tour"}
+              </button>
+              <button className="pill alt" type="button" aria-pressed={night} onClick={() => setNight((v) => !v)}>
+                {night ? "Switch to dusk" : "Switch to night"}
+              </button>
+            </div>
             <p className="hint">Drag to turn the island. Click a building or tag to fly in.</p>
           </section>
 

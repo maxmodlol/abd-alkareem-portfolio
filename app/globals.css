@@ -608,3 +608,102 @@ h2 {
     transition: none;
   }
 }
+
+/* cinematic layer */
+.bars::before,
+.bars::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 7vh;
+  background: #000;
+  z-index: 5;
+  pointer-events: none;
+  animation: bars 1.2s ease 6s forwards;
+}
+.bars::before {
+  top: 0;
+}
+.bars::after {
+  bottom: 0;
+}
+@keyframes bars {
+  to {
+    height: 0;
+  }
+}
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--paper);
+  pointer-events: none;
+  animation: intro 6s ease forwards;
+}
+.intro span {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.intro b {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(34px, 7vw, 84px);
+  letter-spacing: -0.03em;
+  text-shadow: 0 6px 40px rgba(0, 0, 0, 0.5);
+}
+@keyframes intro {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  18%,
+  58% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+.ctl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.mctl {
+  display: none;
+}
+@media (max-width: 759px) {
+  .mctl {
+    display: flex;
+    gap: 6px;
+    pointer-events: auto;
+  }
+  .mctl button {
+    border: 0;
+    border-radius: 999px;
+    padding: 5px 12px;
+    background: rgba(15, 34, 41, 0.82);
+    color: var(--paper);
+    font-weight: 700;
+    font-size: 13px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro,
+  .bars::before,
+  .bars::after {
+    animation: none;
+    display: none;
+  }
+}
