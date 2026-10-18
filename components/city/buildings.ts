@@ -604,4 +604,84 @@ export function buildWatan(kit: Kit, folks: Folks, island: THREE.Group): { group
   return { group: g, gate };
 }
 
+/* ------------------------------------------------------------------ */
+/* CareBooks: a small library-bookshop with a ramp, a reading garden and a floating open book.     */
+/* ------------------------------------------------------------------ */
+export function buildCarebooks(kit: Kit, folks: Folks, island: THREE.Group, label: string): THREE.Group {
+  const g = newGroup(island, "carebooks", 9.0, 2.6, Math.PI);
+  const wall = kit.facade("#ead9c3", { cols: 5, rows: 3, seed: 101, glass: "#cfe4f5", lit: 0.8, day: 0.4, night: 3, rough: 0.8 });
+  kit.box(g, 2.4, 1.7, 1.3, kit.sides(wall, kit.mat(0xd9c8aa)), 0, 0, -0.55);
+  const roof = kit.put(g, kit.gable(1.55, 0.75, 2.6), kit.mat(0x4f6f9a, 0.75), 0, 1.7, -0.55);
+  roof.rotation.y = Math.PI / 2;
+  kit.box(g, 0.5, 0.85, 0.06, 0x3a4f6b, 0.0, 0, 0.11, false);
+  const sign = kit.sign(label, 1.6, 0.4, { fg: "#fff8ee", bg: "#3f6fa8", day: 0.5, night: 2.4 });
+  sign.position.set(0, 1.2, 0.115);
+  g.add(sign);
+
+  /* ramp up to the door, a bench, a reading garden */
+  const ramp = kit.box(g, 0.7, 0.05, 1.1, 0xcfc4b0, 0.75, 0.04, 0.65, true);
+  ramp.rotation.x = 0.12;
+  kit.box(g, 0.03, 0.22, 1.1, 0x33475b, 1.12, 0.06, 0.65, false);
+  kit.box(g, 0.7, 0.04, 0.2, 0x8a5a3c, -0.5, 0.17, 0.2, true);
+  kit.box(g, 0.7, 0.2, 0.03, 0x8a5a3c, -0.5, 0.2, 0.11, true);
+  kit.box(g, 0.05, 0.17, 0.2, 0x4a2f1f, -0.8, 0, 0.2, false);
+  kit.box(g, 0.05, 0.17, 0.2, 0x4a2f1f, -0.2, 0, 0.2, false);
+  const leaf = kit.mat(0x58c985, 0.85, 0, true);
+  ([-1, 1] as const).forEach((sx) => {
+    kit.cyl(g, 0.05, 0.07, 0.4, 0x8a5a3c, sx * 1.1, 0, 1.0, 6);
+    kit.put(g, new THREE.IcosahedronGeometry(0.34, 0), leaf, sx * 1.1, 0.75, 1.0);
+  });
+  kit.lamp(g, -1.0, 0.7, 1.0);
+  kit.pointLight(g, 0xffd9a0, 0.3, 1.4, 3, 0, 1.0, 0.7);
+
+  /* a wheelchair user with a friend, and two readers on the bench */
+  kit.box(g, 0.22, 0.03, 0.22, 0x33475b, 0.1, 0.17, 0.95, false);
+  kit.box(g, 0.22, 0.2, 0.03, 0x33475b, 0.1, 0.2, 0.84, false);
+  ([-1, 1] as const).forEach((s) => {
+    const w = kit.put(g, new THREE.CylinderGeometry(0.1, 0.1, 0.03, 14), kit.mat(0x1c1c24, 0.6), 0.1 + s * 0.14, 0.1, 0.95, false);
+    w.rotation.z = Math.PI / 2;
+  });
+  folks.person(g, "sit", 0.1, 0, 0.95, Math.PI * 0.8);
+  folks.person(g, "stand", 0.38, 0, 1.02, Math.PI * 1.2);
+  folks.person(g, "sit", -0.65, 0.01, 0.22, Math.PI * 0.9);
+  folks.person(g, "sit", -0.35, 0.01, 0.22, Math.PI * 1.1);
+
+  /* the open book that floats above the roof */
+  const book = new THREE.Group();
+  book.position.set(0, 3.1, -0.55);
+  g.add(book);
+  const cover = kit.glowMat(0xffd9a0, 1.1, 3.4, 0x4a3a20);
+  const pageMat = additive(0xfff4e3, 0.9, 2.2);
+  const left = new THREE.Group();
+  const right = new THREE.Group();
+  book.add(left, right);
+  kit.box(left, 0.55, 0.03, 0.75, cover, -0.28, 0, 0, false);
+  kit.box(right, 0.55, 0.03, 0.75, cover, 0.28, 0, 0, false);
+  const pages: THREE.Group[] = [];
+  for (let i = 0; i < 4; i++) {
+    const pg = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.7), pageMat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.x = 0.26;
+    pg.add(m);
+    book.add(pg);
+    pages.push(pg);
+  }
+  kit.pointLight(g, 0xffd9a0, 0.4, 1.6, 4, 0, 2.6, -0.55);
+  kit.hit(g, 2.8, 3.6, 2.8, 1.8, 0);
+
+  kit.anims.push((t) => {
+    book.position.y = 3.1 + Math.sin(t * 1.4) * 0.1;
+    book.rotation.y = Math.sin(t * 0.4) * 0.3;
+    left.rotation.z = -0.35;
+    right.rotation.z = 0.35;
+    pages.forEach((pg, i) => {
+      const u = (t * 0.55 + i * 0.25) % 1;
+      pg.rotation.z = Math.PI - 0.35 - u * (Math.PI - 0.7);
+      pg.visible = u < 0.98;
+    });
+  });
+  return g;
+}
+
 export const BUILDING_ACCENT = { coral: CORAL, ink: INK };

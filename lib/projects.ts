@@ -1,6 +1,6 @@
 export type Project = {
   /** Also the key of the matching building in the 3D scene. */
-  id: "villagewellth" | "sahefa" | "diwan" | "oliva" | "watan";
+  id: "villagewellth" | "sahefa" | "diwan" | "oliva" | "watan" | "carebooks";
   /** Product name. */
   name: string;
   /** Short floating label on the island. */
@@ -58,5 +58,14 @@ export const projects: Project[] = [
     short: "Live checkpoint status between cities",
     text: "Live checkpoint status between Palestinian cities, with history, reviews and a map. Users and admins can both post updates.",
     stack: ["Flutter", "Firebase", "MongoDB", "Maps", "Geolocation"],
+  },
+  {
+    id: "carebooks",
+    name: "CareBooks",
+    tag: "CareBooks",
+    kind: "Book publishing and shop platform",
+    short: "Books for families of people with disabilities",
+    text: "A CMS and online shop for publishing and buying books that help families and friends learn how to support people with disabilities.",
+    stack: ["Angular", "Node.js"],
   },
 ];

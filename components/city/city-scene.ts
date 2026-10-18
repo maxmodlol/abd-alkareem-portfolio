@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { buildDiwan, buildOliva, buildSahefa, buildVillageWellth, buildWatan } from "./buildings";
+import { buildCarebooks, buildDiwan, buildOliva, buildSahefa, buildVillageWellth, buildWatan } from "./buildings";
 import { createFx } from "./fx";
 import { Kit, type BuildingId } from "./kit";
 import { Folks } from "./people";
@@ -44,6 +44,7 @@ const TAG_HEIGHT: Record<BuildingId, number> = {
   diwan: 3.4,
   oliva: 3.3,
   watan: 4.9,
+  carebooks: 4.4,
 };
 
 const BUILDING_POS: Record<BuildingId, [number, number]> = {
@@ -52,6 +53,7 @@ const BUILDING_POS: Record<BuildingId, [number, number]> = {
   diwan: [-4.6, 4.6],
   oliva: [4.6, 4.6],
   watan: [-8.2, 0],
+  carebooks: [9.0, 2.6],
 };
 
 const DUSK = 0.38;
@@ -131,6 +133,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   buildDiwan(kit, folks, island);
   buildOliva(kit, folks, island);
   const watan = buildWatan(kit, folks, island);
+  buildCarebooks(kit, folks, island, "CareBooks");
   traffic.zones.push({ axis: "x", dir: -1, stop: -7.55, red: () => !watan.gate.open });
   traffic.zones.push({ axis: "x", dir: 1, stop: -8.85, red: () => !watan.gate.open });
   makeStreets(kit, island, traffic, folks);
@@ -140,6 +143,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     diwan: new THREE.Vector3(-4.6, 2.4, 4.6),
     oliva: new THREE.Vector3(4.6, 2.7, 4.6),
     watan: new THREE.Vector3(-8.2, 4.4, 0),
+    carebooks: new THREE.Vector3(9.0, 3.6, 2.6),
   });
   makeSkyLife(kit, scene);
 
@@ -168,6 +172,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     sahefa: spec("sahefa", 1.3, 13.5, 5.4, 3.0, 0.4),
     diwan: spec("diwan", 1.1, 12.5, 5.0, 2.7, 0.38),
     oliva: spec("oliva", 1.2, 12.5, 5.0, 3.0, 0.38),
+    carebooks: { t: [9.0, 1.3, 2.6], d: 12, yaw: Math.PI * 0.92, pitch: 0.36, w: 3.8, hh: 3.2 },
     watan: { t: [-8.2, 1.5, 0], d: 11.5, yaw: Math.PI / 2, pitch: 0.34, w: 4.8, hh: 3.4 },
   };
 
