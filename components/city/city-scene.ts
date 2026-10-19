@@ -41,7 +41,7 @@ export type CityScene = {
 type FocusSpec = { t: [number, number, number]; d: number; yaw: number; pitch: number; w: number; hh: number };
 
 const TAG_HEIGHT: Record<BuildingId, number> = {
-  villagewellth: 11.9,
+  villagewellth: 9.9,
   sahefa: 4.0,
   diwan: 3.4,
   oliva: 3.3,
@@ -143,7 +143,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   traffic.zones.push({ axis: "x", dir: 1, stop: -8.85, red: () => !watan.gate.open });
   makeStreets(kit, island, traffic, folks);
   makeArcs(kit, island, {
-    villagewellth: new THREE.Vector3(-4.6, 10.9, -4.6),
+    villagewellth: new THREE.Vector3(-4.6, 9.3, -4.6),
     sahefa: new THREE.Vector3(4.6, 3.4, -4.6),
     diwan: new THREE.Vector3(-4.6, 2.4, 4.6),
     oliva: new THREE.Vector3(4.6, 2.7, 4.6),
@@ -173,8 +173,8 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     return { t: [x, y, z], d, yaw: Math.atan2(-x, -z), pitch, w, hh };
   };
   const focusSpecs: Record<FocusKey, FocusSpec> = {
-    home: { t: [0, 0.4, 0], d: 33, yaw: 0.75, pitch: 0.55, w: 12.5, hh: 9 },
-    villagewellth: spec("villagewellth", 4.9, 28, 4.8, 6.4, 0.3),
+    home: { t: [0, 1.6, 0], d: 36, yaw: 0.75, pitch: 0.55, w: 12.5, hh: 9 },
+    villagewellth: spec("villagewellth", 4.0, 25, 4.8, 5.2, 0.3),
     sahefa: spec("sahefa", 1.3, 17.5, 5.4, 3.0, 0.4),
     diwan: spec("diwan", 1.1, 16.5, 5.0, 2.7, 0.38),
     oliva: spec("oliva", 1.2, 16.5, 5.0, 3.0, 0.38),

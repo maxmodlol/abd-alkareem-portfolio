@@ -138,7 +138,7 @@ export class Traffic {
     };
     paint(this.sig.ew, ewGreen, ewAmber);
     paint(this.sig.ns, nsGreen, nsAmber);
-    this.beamMat.opacity = 0.03 + this.kit.night * 0.2;
+    this.beamMat.opacity = this.kit.night * 0.08;
 
     for (const c of this.cars) {
       let target = c.max;

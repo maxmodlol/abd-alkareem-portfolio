@@ -165,7 +165,7 @@ export function makeSea(scene: THREE.Scene, island: THREE.Group): Sea {
       pos.needsUpdate = true;
       mat.color.lerpColors(dayC, nightC, night);
       foam.scale.setScalar(1 + Math.sin(t * 0.8) * 0.012);
-      foamMat.opacity = 0.5 - night * 0.18;
+      foamMat.opacity = 0.3 - night * 0.1;
     },
   };
 }
@@ -558,7 +558,7 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
   });
   const sl = new THREE.Mesh(new THREE.ConeGeometry(1.0, 7, 18, 1, true), lightMat);
   sl.position.set(0, -3.5, 0.3);
-  heli.add(sl);
+  void sl;
   heli.scale.setScalar(1.3);
 
   /* hot air balloon */
@@ -752,7 +752,7 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
     });
 
     sweep.rotation.y = t * 0.8;
-    beamMat.opacity = 0.03 + kit.night * 0.2;
+    beamMat.opacity = kit.night * 0.07;
     lamp.scale.setScalar(1 + Math.sin(t * 5) * 0.04);
 
     clouds.forEach((c) => {

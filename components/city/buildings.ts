@@ -52,9 +52,9 @@ export function buildVillageWellth(kit: Kit, folks: Folks, island: THREE.Group):
   kit.box(g, 4.2, 0.9, 4.2, kit.sides(pod, stone), 0, 0, 0);
 
   const sections: { w: number; h: number; y: number; seed: number; cols: number; rows: number }[] = [
-    { w: 3.2, h: 3.7, y: 0.9, seed: 21, cols: 8, rows: 8 },
-    { w: 2.6, h: 2.8, y: 4.6, seed: 22, cols: 6, rows: 6 },
-    { w: 1.9, h: 1.8, y: 7.4, seed: 23, cols: 5, rows: 4 },
+    { w: 3.2, h: 3.1, y: 0.9, seed: 21, cols: 8, rows: 7 },
+    { w: 2.6, h: 2.2, y: 4.0, seed: 22, cols: 6, rows: 5 },
+    { w: 1.9, h: 1.5, y: 6.2, seed: 23, cols: 5, rows: 3 },
   ];
   const fin = kit.glowMat(0x6fe3ff, 1.1, 3.6, 0x16313a);
   sections.forEach((s) => {
@@ -70,17 +70,17 @@ export function buildVillageWellth(kit: Kit, folks: Folks, island: THREE.Group):
   });
 
   const band = kit.glowMat(0xff7a59, 1.3, 3.8, 0x3a1a14);
-  kit.box(g, 2.0, 0.1, 2.0, band, 0, 9.2, 0, false);
-  kit.cyl(g, 0.035, 0.07, 1.6, 0x26333c, 0, 9.3, 0, 8);
-  const beacon = kit.ball(g, 0.14, kit.glowMat(0xff6b57, 2.6, 5.5, 0x3a1a14), 0, 10.95, 0, 14, false);
-  kit.pointLight(g, 0xff7a59, 0.6, 2.4, 8, 0, 10.4, 0);
+  kit.box(g, 2.0, 0.1, 2.0, band, 0, 7.7, 0, false);
+  kit.cyl(g, 0.035, 0.07, 1.3, 0x26333c, 0, 7.8, 0, 8);
+  const beacon = kit.ball(g, 0.14, kit.glowMat(0xff6b57, 2.6, 5.5, 0x3a1a14), 0, 9.25, 0, 14, false);
+  kit.pointLight(g, 0xff7a59, 0.5, 2.0, 7, 0, 8.8, 0);
   const beamMat = additive(0xff6b57, 0.16, 1.6);
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.25, 7, 14, 1, true), beamMat);
-  beam.position.set(0, 14.4, 0);
+  beam.position.set(0, 12.75, 0);
   g.add(beam);
 
   /* halo rings with travelling orbs */
-  const ringMat = additive(0xff6b57, 0.9, 2.4);
+  const ringMat = additive(0xff6b57, 0.55, 1.8);
   const mkRing = (r: number, y: number) => {
     const grp = new THREE.Group();
     grp.position.y = y;
@@ -96,8 +96,8 @@ export function buildVillageWellth(kit: Kit, folks: Folks, island: THREE.Group):
     g.add(grp);
     return grp;
   };
-  const ring1 = mkRing(2.5, 5.9);
-  const ring2 = mkRing(2.05, 8.3);
+  const ring1 = mkRing(2.5, 5.0);
+  const ring2 = mkRing(2.05, 6.95);
 
   /* entrance, signs, planters */
   kit.box(g, 0.9, 0.62, 0.06, 0x10181d, 0, 0, 2.12, false);
@@ -116,7 +116,7 @@ export function buildVillageWellth(kit: Kit, folks: Folks, island: THREE.Group):
     ([-1, 1] as const).forEach((sz) => kit.ball(g, 0.2, bush, sx * 1.85, 1.0, sz * 1.85, 8));
   });
   kit.pointLight(g, 0xffc27a, 0.4, 1.8, 3, 0, 0.8, 2.9);
-  kit.hit(g, 4.4, 11.4, 4.4, 5.7);
+  kit.hit(g, 4.4, 8.9, 4.4, 4.45);
 
   folks.person(g, "stand", -1.3, 0, 2.8, Math.PI / 2, { prop: "bag" });
   folks.person(g, "stand", -0.95, 0, 2.8, -Math.PI / 2);
@@ -125,7 +125,7 @@ export function buildVillageWellth(kit: Kit, folks: Folks, island: THREE.Group):
   kit.anims.push((t) => {
     ring1.rotation.y = t * 0.7;
     ring2.rotation.y = -t * 1.0;
-    beamMat.opacity = 0.1 + (0.08 + 0.1 * kit.night) * (0.5 + 0.5 * Math.sin(t * 2.2));
+    beamMat.opacity = 0.03 + (0.03 + 0.05 * kit.night) * (0.5 + 0.5 * Math.sin(t * 2.2));
     beacon.scale.setScalar(1 + Math.sin(t * 4) * 0.12);
   });
   return g;
@@ -592,9 +592,9 @@ export function buildWatan(kit: Kit, folks: Folks, island: THREE.Group): { group
     }
     pin.position.y = 3.9 + Math.sin(t * 2) * 0.16;
     pin.rotation.y = t * 1.1;
-    pillarMat.opacity = 0.09 + 0.08 * (0.5 + 0.5 * Math.sin(t * 2.4)) + kit.night * 0.08;
+    pillarMat.opacity = 0.04 + 0.03 * (0.5 + 0.5 * Math.sin(t * 2.4)) + kit.night * 0.05;
     spot.rotation.y = t * 0.9;
-    spotMat.opacity = 0.05 + kit.night * 0.2;
+    spotMat.opacity = kit.night * 0.06;
     ripples.forEach((r) => {
       const u = (t * 0.45 + r.ph) % 1;
       r.m.scale.setScalar(0.6 + u * 3.2);
