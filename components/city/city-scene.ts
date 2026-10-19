@@ -58,7 +58,7 @@ const BUILDING_POS: Record<BuildingId, [number, number]> = {
   arvo: [9.0, -2.6],
 };
 
-const DUSK = 0.38;
+const DUSK = 0.22;
 
 function angDiff(a: number, b: number): number {
   let d = (b - a) % (Math.PI * 2);
@@ -81,7 +81,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     return null;
   }
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1;
+  renderer.toneMappingExposure = 0.9;
   renderer.shadowMap.enabled = !startNarrow;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -171,14 +171,14 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     return { t: [x, y, z], d, yaw: Math.atan2(-x, -z), pitch, w, hh };
   };
   const focusSpecs: Record<FocusKey, FocusSpec> = {
-    home: { t: [0, 0.4, 0], d: 27, yaw: 0.75, pitch: 0.55, w: 12.5, hh: 9 },
-    villagewellth: spec("villagewellth", 4.9, 21, 4.8, 6.4, 0.3),
-    sahefa: spec("sahefa", 1.3, 13.5, 5.4, 3.0, 0.4),
-    diwan: spec("diwan", 1.1, 12.5, 5.0, 2.7, 0.38),
-    oliva: spec("oliva", 1.2, 12.5, 5.0, 3.0, 0.38),
-    carebooks: { t: [9.0, 1.3, 2.6], d: 12, yaw: Math.PI * 0.92, pitch: 0.36, w: 3.8, hh: 3.2 },
-    arvo: { t: [9.0, 1.3, -2.6], d: 12, yaw: 0.2, pitch: 0.36, w: 3.8, hh: 3.2 },
-    watan: { t: [-8.2, 1.5, 0], d: 11.5, yaw: Math.PI / 2, pitch: 0.34, w: 4.8, hh: 3.4 },
+    home: { t: [0, 0.4, 0], d: 33, yaw: 0.75, pitch: 0.55, w: 12.5, hh: 9 },
+    villagewellth: spec("villagewellth", 4.9, 28, 4.8, 6.4, 0.3),
+    sahefa: spec("sahefa", 1.3, 17.5, 5.4, 3.0, 0.4),
+    diwan: spec("diwan", 1.1, 16.5, 5.0, 2.7, 0.38),
+    oliva: spec("oliva", 1.2, 16.5, 5.0, 3.0, 0.38),
+    carebooks: { t: [9.0, 1.3, 2.6], d: 16, yaw: Math.PI * 0.92, pitch: 0.36, w: 3.8, hh: 3.2 },
+    arvo: { t: [9.0, 1.3, -2.6], d: 16, yaw: 0.2, pitch: 0.36, w: 3.8, hh: 3.2 },
+    watan: { t: [-8.2, 1.5, 0], d: 15, yaw: Math.PI / 2, pitch: 0.34, w: 4.8, hh: 3.4 },
   };
 
   const cam = { yaw: 0.2, pitch: 0.5, dist: 40, fov: 34, t: new THREE.Vector3(0, 0, 0) };
@@ -198,7 +198,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     const f = focusSpecs[key];
     if (!narrow) return f.d;
     const th = Math.tan((fovFor(key) * Math.PI) / 360);
-    return Math.min(95, Math.max(7, Math.max(f.w / (th * camera.aspect), f.hh / (th * freeFrac))));
+    return Math.min(95, Math.max(7, Math.max(f.w / (th * camera.aspect), f.hh / (th * freeFrac)) * 1.2));
   };
 
   const applyFocus = (key: FocusKey, keepPose: boolean) => {
@@ -238,7 +238,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   fx = createFx(renderer, scene, camera, { samples: startNarrow ? 0 : 4, tilt: startNarrow ? 0 : 1 });
   layout();
   const t0 = performance.now();
-  const introMs = reduceMotion ? 1 : 7000;
+  const introMs = reduceMotion ? 1 : 3200;
   cam.dist = goal.dist;
   window.addEventListener("resize", layout, { signal });
 
@@ -360,10 +360,10 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     sunDir.lerpVectors(sunDay, sunNight, n).normalize();
     sun.position.copy(sunDir).multiplyScalar(34);
     sun.color.lerpColors(cSunDay, cSunNight, n);
-    sun.intensity = lerp(3.6, 1.0, n);
+    sun.intensity = lerp(2.7, 0.9, n);
     hemi.color.lerpColors(hSkyDay, hSkyNight, n);
     hemi.groundColor.lerpColors(hGroundDay, hGroundNight, n);
-    hemi.intensity = lerp(1.5, 0.75, n);
+    hemi.intensity = lerp(1.25, 0.7, n);
     fill.intensity = lerp(0.5, 0.25, n);
     scene.environmentIntensity = lerp(0.55, 0.3, n);
     sky.update(n, sunDir, camera.position);
@@ -381,7 +381,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       for (const a of kit.anims) a(0, 0);
     }
 
-    if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0) goal.yaw += 0.0014;
+    if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0) goal.yaw += 0.0007;
     cam.yaw += (goal.yaw - cam.yaw) * k;
     cam.pitch += (goal.pitch - cam.pitch) * k;
     cam.dist += (goal.dist - cam.dist) * k;
@@ -391,9 +391,9 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     /* the opening shot: a low sweep that rises and pulls in while the lights come on */
     const e = easeOut(Math.min(1, (now - t0) / introMs));
     const sway = reduceMotion ? 0 : 1;
-    const yaw = cam.yaw - (1 - e) * 1.9 + Math.sin(t * 0.31) * 0.012 * sway;
-    const pitch = cam.pitch - (1 - e) * 0.3 + Math.sin(t * 0.23 + 1) * 0.006 * sway;
-    const dist = cam.dist * (1 + (1 - e) * 1.1);
+    const yaw = cam.yaw - (1 - e) * 0.55;
+    const pitch = cam.pitch - (1 - e) * 0.1;
+    const dist = cam.dist * (1 + (1 - e) * 0.3);
     const cp = Math.cos(pitch);
     camera.position.set(
       cam.t.x + Math.sin(yaw) * cp * dist,

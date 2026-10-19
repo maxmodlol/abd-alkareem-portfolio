@@ -53,7 +53,7 @@ export function createSkyMaterial(): THREE.ShaderMaterial {
         vec3 col = mix(uHor, uMid, smoothstep(0.0, 0.32, h));
         col = mix(col, uTop, smoothstep(0.22, 0.95, h));
         float s = max(dot(d, uSunDir), 0.0);
-        col += uSun * uSunPower * (pow(s, 6.0) * 0.28 + pow(s, 70.0) * 1.1 + pow(s, 1400.0) * 14.0);
+        col += uSun * uSunPower * (pow(s, 6.0) * 0.16 + pow(s, 70.0) * 0.5 + pow(s, 1400.0) * 5.0);
         col = mix(col, uHor * 0.55, smoothstep(0.0, -0.25, d.y));
         gl_FragColor = vec4(col, 1.0);
       }
@@ -464,7 +464,7 @@ export function makeArcs(kit: Kit, island: THREE.Group, points: Record<string, T
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const orbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffa27a).multiplyScalar(3.2), toneMapped: true });
+  const orbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffa27a).multiplyScalar(2.0), toneMapped: true });
   const orbGeo = new THREE.SphereGeometry(0.07, 8, 6);
   const orbs: { m: THREE.Mesh; curve: THREE.QuadraticBezierCurve3; ph: number; sp: number }[] = [];
   pairs.forEach(([a, b], i) => {

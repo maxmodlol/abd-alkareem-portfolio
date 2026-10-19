@@ -18,9 +18,9 @@ const GRADE = {
     tDiffuse: { value: null as THREE.Texture | null },
     uTime: { value: 0 },
     uRes: { value: new THREE.Vector2(1, 1) },
-    uVig: { value: 0.55 },
-    uGrain: { value: 0.045 },
-    uAb: { value: 0.0014 },
+    uVig: { value: 0.28 },
+    uGrain: { value: 0.015 },
+    uAb: { value: 0.0006 },
     uTilt: { value: 1 },
   },
   vertexShader: `
@@ -55,7 +55,7 @@ const GRADE = {
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
       col = mix(col, col * vec3(1.07, 1.0, 0.92), smoothstep(0.45, 1.0, l));
       col = mix(col, col * vec3(0.9, 1.0, 1.1), 1.0 - smoothstep(0.0, 0.45, l));
-      col = (col - 0.5) * 1.07 + 0.5;
+      col = (col - 0.5) * 1.02 + 0.5;
       float d = length(c * vec2(1.0, 0.92));
       col *= mix(1.0, smoothstep(0.88, 0.25, d), uVig);
       col += (hash(vUv * uRes + fract(uTime) * 91.0) - 0.5) * uGrain;
@@ -81,14 +81,14 @@ export function createFx(
     composer.setPixelRatio(pr);
     composer.setSize(size.x, size.y);
     const renderPass = new RenderPass(scene, camera);
-    const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.6, 0.6, 0.85);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.3, 0.5, 0.92);
     const output = new OutputPass();
     const grade = new ShaderPass({
       uniforms: THREE.UniformsUtils.clone(GRADE.uniforms),
       vertexShader: GRADE.vertexShader,
       fragmentShader: GRADE.fragmentShader,
     });
-    grade.uniforms.uTilt.value = o.tilt;
+    grade.uniforms.uTilt.value = o.tilt * 0.4;
     grade.uniforms.uRes.value.set(size.x * pr, size.y * pr);
     composer.addPass(renderPass);
     composer.addPass(bloom);
@@ -105,8 +105,8 @@ export function createFx(
         grade.uniforms.uRes.value.set(w * ratio, h * ratio);
       },
       setNight(n) {
-        bloom.strength = 0.45 + n * 0.55;
-        bloom.threshold = 0.88 - n * 0.08;
+        bloom.strength = 0.25 + n * 0.3;
+        bloom.threshold = 0.92 - n * 0.06;
       },
       dispose() {
         renderPass.dispose();
