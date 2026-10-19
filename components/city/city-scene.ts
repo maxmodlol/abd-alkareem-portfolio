@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import { buildArvo, buildCarebooks, buildDiwan, buildOliva, buildSahefa, buildVillageWellth, buildWatan } from "./buildings";
+import { Explorer, type ExplorerEvents, type RoutePoint } from "./explorer";
 import { createFx } from "./fx";
 import { Kit, type BuildingId } from "./kit";
 import { Folks } from "./people";
@@ -35,6 +36,9 @@ export type CityScene = {
   setNight: (n: number) => void;
   /** Shifts the island sideways on desktop while the detail card is open. */
   setPanelOpen: (open: boolean) => void;
+  /** Starts the guided walk. Returns false when it is not available (reduced motion). */
+  startWalk: (events: { onStop: (id: BuildingId) => void; onLeave: (id: BuildingId) => void }) => boolean;
+  stopWalk: () => void;
   dispose: () => void;
 };
 
@@ -61,6 +65,18 @@ const BUILDING_POS: Record<BuildingId, [number, number]> = {
 };
 
 const DUSK = 0.22;
+
+/* the guided walk: pavement on both sides of the main road, one stop in front of each building */
+const WALK_ROUTE: RoutePoint[] = [
+  { at: [-4.6, -1.4], stop: { id: "villagewellth", look: [-4.6, -4.6] } },
+  { at: [4.6, -1.4], stop: { id: "sahefa", look: [4.6, -4.6] } },
+  { at: [9.0, -1.4], stop: { id: "arvo", look: [9.0, -2.6] } },
+  { at: [9.0, 1.4], stop: { id: "carebooks", look: [9.0, 2.6] } },
+  { at: [4.6, 1.4], stop: { id: "oliva", look: [4.6, 4.6] } },
+  { at: [-4.6, 1.4], stop: { id: "diwan", look: [-4.6, 4.6] } },
+  { at: [-6.4, 1.4], stop: { id: "watan", look: [-8.2, 0] } },
+  { at: [-6.4, -1.4] },
+];
 
 function angDiff(a: number, b: number): number {
   let d = (b - a) % (Math.PI * 2);
@@ -152,6 +168,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     arvo: new THREE.Vector3(9.0, 3.4, -2.6),
   });
   makeSkyLife(kit, scene);
+  const explorer = new Explorer(kit, folks, island, WALK_ROUTE);
 
   const byId = {} as Record<BuildingId, THREE.Object3D>;
   island.children.forEach((c) => {
@@ -196,6 +213,9 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   let offX = 0;
   let offGoal = 0;
   let nightGoal = DUSK;
+  let walking = false;
+  let walkOff = 0;
+  let lite = false;
   let fx: ReturnType<typeof createFx> = null;
 
   const fovFor = (key: FocusKey) => (narrow ? 50 : key === "home" ? 34 : 30);
@@ -223,7 +243,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     const w = window.innerWidth;
     const h = window.innerHeight;
     narrow = m.narrow;
-    const pr = Math.min(window.devicePixelRatio || 1, narrow ? 1.5 : 2);
+    const pr = Math.min(window.devicePixelRatio || 1, narrow || lite ? 1.5 : 2);
     renderer.setPixelRatio(pr);
     renderer.setSize(w, h, false);
     fx?.resize(w, h, pr);
@@ -310,6 +330,11 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       down.moved += Math.abs(dx) + Math.abs(dy);
       down.x = e.clientX;
       down.y = e.clientY;
+      if (walking) {
+        walkOff = Math.max(-2.2, Math.min(2.2, walkOff - dx * 0.006));
+        idleAt = performance.now() + 4000;
+        return;
+      }
       goal.yaw -= dx * 0.006;
       goal.pitch = Math.min(1.15, Math.max(0.18, goal.pitch + dy * 0.004));
       idleAt = performance.now() + 4000;
@@ -381,6 +406,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
 
     if (!reduceMotion) {
       folks.update(t, dt);
+      explorer.update(t, dt);
       traffic.update(t, dt);
       for (const a of kit.anims) a(t, dt);
     } else {
@@ -388,7 +414,19 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       for (const a of kit.anims) a(0, 0);
     }
 
-    if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0) goal.yaw += 0.0007;
+    if (walking) {
+      /* chase camera: behind him while he walks, in front of him while he greets the visitor */
+      explorer.position(v);
+      island.localToWorld(v);
+      goal.t.copy(v);
+      const dwell = explorer.dwelling;
+      const want = explorer.heading + (dwell ? 0.55 : Math.PI) + walkOff;
+      goal.yaw += angDiff(goal.yaw, want);
+      goal.pitch = dwell ? 0.2 : 0.3;
+      goal.dist = (dwell ? 5.6 : 4.6) * (narrow ? 1.25 : 1);
+      goal.fov = narrow ? 56 : 42;
+      if (ptrs.size === 0) walkOff *= 1 - Math.min(1, dt * 0.7);
+    } else if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0) goal.yaw += 0.0007;
     cam.yaw += (goal.yaw - cam.yaw) * k;
     cam.pitch += (goal.pitch - cam.pitch) * k;
     cam.dist += (goal.dist - cam.dist) * k;
@@ -453,7 +491,9 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   raf = requestAnimationFrame(frame);
 
   return {
-    focus: (key) => applyFocus(key, false),
+    focus: (key) => {
+      if (!walking) applyFocus(key, false);
+    },
     select: (id) => {
       selected = id;
     },
@@ -465,8 +505,32 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     setNight: (n) => {
       nightGoal = Math.min(1, Math.max(0, n));
     },
+    startWalk: (events) => {
+      if (reduceMotion) return false;
+      const ev: ExplorerEvents = {
+        onStop: (id) => events.onStop(id as BuildingId),
+        onLeave: (id) => events.onLeave(id as BuildingId),
+      };
+      walking = true;
+      walkOff = 0;
+      lite = true;
+      fx?.setLite(true);
+      layout();
+      explorer.start(ev);
+      return true;
+    },
+    stopWalk: () => {
+      if (!walking) return;
+      walking = false;
+      lite = false;
+      explorer.stop();
+      fx?.setLite(false);
+      layout();
+      applyFocus("home", false);
+    },
     dispose: () => {
       cancelAnimationFrame(raf);
+      explorer.dispose();
       abort.abort();
       const seen = new Set<THREE.Texture>();
       scene.traverse((obj) => {

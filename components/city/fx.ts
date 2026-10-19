@@ -9,6 +9,8 @@ export type Fx = {
   render: (dt: number, t: number) => void;
   resize: (w: number, h: number, pr: number) => void;
   setNight: (n: number) => void;
+  /** Cheaper frames for the walking tour: no bloom, no tilt-shift blur. */
+  setLite: (on: boolean) => void;
   dispose: () => void;
 };
 
@@ -103,6 +105,10 @@ export function createFx(
         composer.setPixelRatio(ratio);
         composer.setSize(w, h);
         grade.uniforms.uRes.value.set(w * ratio, h * ratio);
+      },
+      setLite(on) {
+        bloom.enabled = !on;
+        grade.uniforms.uTilt.value = on ? 0 : o.tilt * 0.4;
       },
       setNight(n) {
         bloom.strength = 0.25 + n * 0.3;

@@ -40,6 +40,7 @@ export function CityApp() {
 
   const stopTour = useCallback(() => {
     window.clearInterval(tourTimer.current);
+    sceneRef.current?.stopWalk();
     setTouring(false);
   }, []);
 
@@ -80,6 +81,11 @@ export function CityApp() {
   const startTour = () => {
     window.clearInterval(tourTimer.current);
     setTouring(true);
+    const walked = sceneRef.current?.startWalk({
+      onStop: (id) => choose(id),
+      onLeave: () => goHome(),
+    });
+    if (walked) return;
     let i = 0;
     const step = () => {
       choose(projects[i % projects.length].id);
