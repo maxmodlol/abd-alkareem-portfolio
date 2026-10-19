@@ -115,12 +115,20 @@ export class Explorer {
   private ring: THREE.Mesh;
   private route: RoutePoint[];
   private events: ExplorerEvents | null = null;
-  private state: "off" | "walk" | "dwell" = "off";
+  private state: "off" | "walk" | "dwell" | "free" = "off";
   private next = 0;
   private wait = 0;
   private x = 0;
   private z = 0;
   private faceMap: THREE.CanvasTexture;
+  private input = { turn: 0, fwd: 0, run: false };
+  private speed = 0;
+  private y = 0;
+  private vy = 0;
+  /** Circles [x, z, radius] he cannot walk into. */
+  colliders: [number, number, number][] = [];
+  /** He cannot walk further than this from the centre of the island. */
+  bound = 10.3;
 
   constructor(kit: Kit, folks: Folks, parent: THREE.Object3D, route: RoutePoint[]) {
     this.route = route;
@@ -191,7 +199,7 @@ export class Explorer {
 
   /** World-space-ish position (island space) of his chest, where the camera looks. */
   position(out: THREE.Vector3): THREE.Vector3 {
-    return out.set(this.x, 0.06 + 0.5 * SCALE, this.z);
+    return out.set(this.x, 0.06 + this.y + 0.5 * SCALE, this.z);
   }
 
   start(events: ExplorerEvents): void {
@@ -209,6 +217,46 @@ export class Explorer {
     this.root.position.set(this.x, 0.06, this.z);
   }
 
+  get free(): boolean {
+    return this.state === "free";
+  }
+
+  get px(): number {
+    return this.x;
+  }
+
+  get pz(): number {
+    return this.z;
+  }
+
+  /** Free play: he starts here and is steered with setInput. */
+  startFree(x: number, z: number, heading: number): void {
+    this.events = null;
+    this.state = "free";
+    this.x = x;
+    this.z = z;
+    this.y = 0;
+    this.vy = 0;
+    this.speed = 0;
+    this.heading = heading;
+    this.person.mode = "stand";
+    this.person.rArm.rotation.z = 0;
+    this.root.visible = true;
+    this.root.rotation.y = heading;
+    this.root.position.set(x, 0.06, z);
+  }
+
+  /** turn: -1 left to 1 right. fwd: -1 back to 1 forward. */
+  setInput(turn: number, fwd: number, run: boolean): void {
+    this.input.turn = Math.max(-1, Math.min(1, turn));
+    this.input.fwd = Math.max(-1, Math.min(1, fwd));
+    this.input.run = run;
+  }
+
+  jump(): void {
+    if (this.state === "free" && this.y < 0.01) this.vy = 3.6;
+  }
+
   stop(): void {
     this.state = "off";
     this.root.visible = false;
@@ -218,8 +266,43 @@ export class Explorer {
 
   update(t: number, dt: number): void {
     if (this.state === "off") return;
-    const pt = this.route[this.next];
     let want = this.heading;
+    if (this.state === "free") {
+      const inp = this.input;
+      const top = inp.fwd >= 0 ? (inp.run ? 3.7 : 2.2) : 1.3;
+      this.speed += (inp.fwd * top - this.speed) * Math.min(1, dt * 7);
+      this.heading -= inp.turn * (Math.abs(this.speed) > 0.2 ? 2.4 : 3.0) * dt;
+      this.x += Math.sin(this.heading) * this.speed * dt;
+      this.z += Math.cos(this.heading) * this.speed * dt;
+      const r = Math.hypot(this.x, this.z);
+      if (r > this.bound) {
+        this.x *= this.bound / r;
+        this.z *= this.bound / r;
+      }
+      for (const [cx, cz, cr] of this.colliders) {
+        const dx = this.x - cx;
+        const dz = this.z - cz;
+        const d = Math.hypot(dx, dz);
+        const min = cr + 0.25;
+        if (d < min && d > 1e-4) {
+          this.x = cx + (dx / d) * min;
+          this.z = cz + (dz / d) * min;
+        }
+      }
+      this.vy -= 12 * dt;
+      this.y += this.vy * dt;
+      if (this.y < 0) {
+        this.y = 0;
+        this.vy = 0;
+      }
+      this.person.mode = Math.abs(this.speed) > 0.2 && this.y < 0.01 ? "walk" : "stand";
+      this.root.rotation.y = this.heading;
+      this.root.position.set(this.x, 0.06 + this.y, this.z);
+      const pulse = 1 + Math.sin(t * 4) * 0.08;
+      this.ring.scale.set(pulse, pulse, pulse);
+      return;
+    }
+    const pt = this.route[this.next];
 
     if (this.state === "walk") {
       const dx = pt.at[0] - this.x;

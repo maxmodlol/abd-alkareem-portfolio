@@ -28,6 +28,12 @@ export type CityOptions = {
   reduceMotion: boolean;
 };
 
+export type PlayHandlers = {
+  onNear: (id: BuildingId | null) => void;
+  onInteract: (id: BuildingId) => void;
+  onCoin: (collected: number, total: number) => void;
+};
+
 export type CityScene = {
   focus: (key: FocusKey) => void;
   select: (id: BuildingId | null) => void;
@@ -39,6 +45,15 @@ export type CityScene = {
   /** Starts the guided walk. Returns false when it is not available (reduced motion). */
   startWalk: (events: { onStop: (id: BuildingId) => void; onLeave: (id: BuildingId) => void }) => boolean;
   stopWalk: () => void;
+  /** Free play: steer the character yourself, collect coins and visit every building. */
+  startPlay: (h: PlayHandlers) => boolean;
+  stopPlay: () => void;
+  setPaused: (paused: boolean) => void;
+  /** Touch stick, each axis from -1 to 1 (x right, y forward). */
+  setStick: (x: number, y: number) => void;
+  jump: () => void;
+  setVisited: (ids: BuildingId[]) => void;
+  setMinimap: (canvas: HTMLCanvasElement | null) => void;
   dispose: () => void;
 };
 
@@ -65,6 +80,17 @@ const BUILDING_POS: Record<BuildingId, [number, number]> = {
 };
 
 const DUSK = 0.22;
+
+/* how far from a building's centre the character is blocked */
+const RADIUS: Record<BuildingId, number> = {
+  villagewellth: 2.6,
+  sahefa: 2.7,
+  diwan: 2.6,
+  oliva: 2.6,
+  watan: 1.2,
+  carebooks: 1.6,
+  arvo: 1.6,
+};
 
 /* the guided walk: pavement on both sides of the main road, one stop in front of each building */
 const WALK_ROUTE: RoutePoint[] = [
@@ -169,6 +195,39 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   });
   makeSkyLife(kit, scene);
   const explorer = new Explorer(kit, folks, island, WALK_ROUTE);
+  explorer.colliders = (Object.keys(RADIUS) as BuildingId[]).map((id): [number, number, number] => [
+    BUILDING_POS[id][0],
+    BUILDING_POS[id][1],
+    RADIUS[id],
+  ]);
+
+  /* coins along the pavements, one instanced mesh */
+  const coinPts: [number, number][] = [];
+  const free = (x: number, z: number) => !explorer.colliders.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr + 0.5);
+  for (let x = -9.6; x <= 9.7; x += 2.4) {
+    if (free(x, -1.4)) coinPts.push([x, -1.4]);
+    if (free(x, 1.4)) coinPts.push([x, 1.4]);
+  }
+  for (let z = -9; z <= 9.1; z += 2.4) {
+    if (Math.abs(z) < 2.5) continue;
+    if (free(-1.4, z)) coinPts.push([-1.4, z]);
+    if (free(1.4, z)) coinPts.push([1.4, z]);
+  }
+  const coinGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.045, 18);
+  coinGeo.rotateX(Math.PI / 2);
+  const coinMat = new THREE.MeshStandardMaterial({
+    color: 0xffc83d,
+    roughness: 0.3,
+    metalness: 0.6,
+    emissive: 0xffa800,
+    emissiveIntensity: 0.55,
+  });
+  const coins = new THREE.InstancedMesh(coinGeo, coinMat, coinPts.length);
+  coins.visible = false;
+  coins.frustumCulled = false;
+  island.add(coins);
+  const coinGot: boolean[] = coinPts.map(() => false);
+  const coinDummy = new THREE.Object3D();
 
   const byId = {} as Record<BuildingId, THREE.Object3D>;
   island.children.forEach((c) => {
@@ -214,6 +273,16 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   let offGoal = 0;
   let nightGoal = DUSK;
   let walking = false;
+  let playing = false;
+  let paused = false;
+  let nearId: BuildingId | null = null;
+  let playH: PlayHandlers | null = null;
+  let coinTotal = 0;
+  let visitedSet = new Set<BuildingId>();
+  let mini: HTMLCanvasElement | null = null;
+  let miniTick = 0;
+  const keys = new Set<string>();
+  const stick = { x: 0, y: 0 };
   let walkOff = 0;
   let lite = false;
   let fx: ReturnType<typeof createFx> = null;
@@ -254,6 +323,9 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       offGoal = panelOpen ? -Math.min(190, w * 0.13) : 0;
       offX = reduceMotion ? offGoal : offX;
       camera.setViewOffset(w, h, offX, 0, w, h);
+    } else if (playing && !panelOpen) {
+      freeFrac = 1;
+      camera.setViewOffset(w, h, 0, 0, w, h);
     } else {
       freeFrac = Math.max(0.3, (m.deckTop - m.topH) / h);
       camera.setViewOffset(w, h, 0, (h - m.deckTop - m.topH) / 2, w, h);
@@ -330,7 +402,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       down.moved += Math.abs(dx) + Math.abs(dy);
       down.x = e.clientX;
       down.y = e.clientY;
-      if (walking) {
+      if (walking || playing) {
         walkOff = Math.max(-2.2, Math.min(2.2, walkOff - dx * 0.006));
         idleAt = performance.now() + 4000;
         return;
@@ -364,6 +436,96 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     },
     { passive: false, signal },
   );
+
+  /* ---------- keyboard ---------- */
+  const typing = (e: KeyboardEvent) => {
+    const el = e.target as HTMLElement | null;
+    return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+  };
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (!playing || typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) e.preventDefault();
+      keys.add(key);
+      if (e.repeat || paused) return;
+      if (key === "e" && nearId) playH?.onInteract(nearId);
+      if (key === " ") explorer.jump();
+    },
+    { signal },
+  );
+  window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()), { signal });
+  window.addEventListener("blur", () => keys.clear(), { signal });
+
+  /* ---------- minimap: the island seen from above, turned so that ahead is up ---------- */
+  const drawMini = () => {
+    if (!mini) return;
+    const ctx = mini.getContext("2d");
+    if (!ctx) return;
+    const S = mini.width;
+    const sc = S / 25;
+    const cy = Math.cos(cam.yaw);
+    const sy = Math.sin(cam.yaw);
+    const P = (x: number, z: number): [number, number] => [S / 2 + (x * cy - z * sy) * sc, S / 2 + (x * sy + z * cy) * sc];
+    ctx.clearRect(0, 0, S, S);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(S / 2, S / 2, S / 2 - 1, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = "rgba(11,48,57,0.88)";
+    ctx.fillRect(0, 0, S, S);
+    const [ox, oz] = P(0, 0);
+    ctx.fillStyle = "#3f7a52";
+    ctx.beginPath();
+    ctx.arc(ox, oz, 11 * sc, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#5b6770";
+    ctx.lineWidth = 2 * sc;
+    ctx.beginPath();
+    let a = P(-11, 0);
+    let b = P(11, 0);
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    a = P(0, -11);
+    b = P(0, 11);
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.stroke();
+    ctx.fillStyle = "#ffc83d";
+    for (let i = 0; i < coinPts.length; i++) {
+      if (coinGot[i]) continue;
+      const q = P(coinPts[i][0], coinPts[i][1]);
+      ctx.fillRect(q[0] - 1.5, q[1] - 1.5, 3, 3);
+    }
+    for (const id of ids) {
+      const q = P(BUILDING_POS[id][0], BUILDING_POS[id][1]);
+      ctx.fillStyle = visitedSet.has(id) ? "#58c985" : "#f25c54";
+      ctx.beginPath();
+      ctx.arc(q[0], q[1], id === nearId ? 6.5 : 5, 0, Math.PI * 2);
+      ctx.fill();
+      if (id === nearId) {
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+    const p = P(explorer.px, explorer.pz);
+    const hs = Math.sin(explorer.heading);
+    const hc = Math.cos(explorer.heading);
+    const ang = Math.atan2(hs * sy + hc * cy, hs * cy - hc * sy);
+    ctx.translate(p[0], p[1]);
+    ctx.rotate(ang);
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.moveTo(8, 0);
+    ctx.lineTo(-5, 5);
+    ctx.lineTo(-2.5, 0);
+    ctx.lineTo(-5, -5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  };
 
   /* ---------- loop ---------- */
   const k = reduceMotion ? 1 : 0.06;
@@ -414,24 +576,72 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       for (const a of kit.anims) a(0, 0);
     }
 
-    if (walking) {
+    if (playing) {
+      const kd = (a: string, b: string) => keys.has(a) || keys.has(b);
+      const turn = (kd("d", "arrowright") ? 1 : 0) - (kd("a", "arrowleft") ? 1 : 0) + stick.x;
+      const fwd = (kd("w", "arrowup") ? 1 : 0) - (kd("s", "arrowdown") ? 1 : 0) + stick.y;
+      const run = keys.has("shift") || Math.hypot(stick.x, stick.y) > 0.92;
+      if (paused) explorer.setInput(0, 0, false);
+      else explorer.setInput(turn, fwd, run);
+
+      let best: BuildingId | null = null;
+      let bd = Infinity;
+      for (const id of ids) {
+        const d = Math.hypot(explorer.px - BUILDING_POS[id][0], explorer.pz - BUILDING_POS[id][1]) - RADIUS[id];
+        if (d < 1.5 && d < bd) {
+          bd = d;
+          best = id;
+        }
+      }
+      if (best !== nearId) {
+        nearId = best;
+        playH?.onNear(best);
+      }
+
+      for (let i = 0; i < coinPts.length; i++) {
+        if (!coinGot[i] && Math.hypot(explorer.px - coinPts[i][0], explorer.pz - coinPts[i][1]) < 0.7) {
+          coinGot[i] = true;
+          coinTotal += 1;
+          playH?.onCoin(coinTotal, coinPts.length);
+        }
+        coinDummy.position.set(coinPts[i][0], 0.62 + Math.sin(t * 3 + i) * 0.07, coinPts[i][1]);
+        coinDummy.rotation.set(0, t * 3 + i, 0);
+        coinDummy.scale.setScalar(coinGot[i] ? 0.0001 : 1);
+        coinDummy.updateMatrix();
+        coins.setMatrixAt(i, coinDummy.matrix);
+      }
+      coins.instanceMatrix.needsUpdate = true;
+
+      miniTick += 1;
+      if (mini && miniTick % 2 === 0) drawMini();
+    }
+
+    if (walking || playing) {
       /* chase camera: behind him while he walks, in front of him while he greets the visitor */
       explorer.position(v);
       island.localToWorld(v);
       goal.t.copy(v);
-      const dwell = explorer.dwelling;
-      const want = explorer.heading + (dwell ? 0.55 : Math.PI) + walkOff;
-      goal.yaw += angDiff(goal.yaw, want);
-      goal.pitch = dwell ? 0.2 : 0.3;
-      goal.dist = (dwell ? 5.6 : 4.6) * (narrow ? 1.25 : 1);
-      goal.fov = narrow ? 56 : 42;
+      if (playing) {
+        goal.yaw += angDiff(goal.yaw, explorer.heading + Math.PI + walkOff);
+        goal.pitch = 0.36;
+        goal.dist = narrow ? 8.2 : 6.2;
+        goal.fov = narrow ? 58 : 46;
+      } else {
+        const dwell = explorer.dwelling;
+        const want = explorer.heading + (dwell ? 0.55 : Math.PI) + walkOff;
+        goal.yaw += angDiff(goal.yaw, want);
+        goal.pitch = dwell ? 0.2 : 0.3;
+        goal.dist = (dwell ? 5.6 : 4.6) * (narrow ? 1.25 : 1);
+        goal.fov = narrow ? 56 : 42;
+      }
       if (ptrs.size === 0) walkOff *= 1 - Math.min(1, dt * 0.7);
     } else if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0) goal.yaw += 0.0007;
-    cam.yaw += (goal.yaw - cam.yaw) * k;
-    cam.pitch += (goal.pitch - cam.pitch) * k;
-    cam.dist += (goal.dist - cam.dist) * k;
-    cam.fov += (goal.fov - cam.fov) * k;
-    cam.t.lerp(goal.t, k);
+    const kk = reduceMotion ? 1 : playing ? 0.12 : walking ? 0.09 : k;
+    cam.yaw += (goal.yaw - cam.yaw) * kk;
+    cam.pitch += (goal.pitch - cam.pitch) * kk;
+    cam.dist += (goal.dist - cam.dist) * kk;
+    cam.fov += (goal.fov - cam.fov) * kk;
+    cam.t.lerp(goal.t, kk);
 
     /* the opening shot: a low sweep that rises and pulls in while the lights come on */
     const e = easeOut(Math.min(1, (now - t0) / introMs));
@@ -490,9 +700,9 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   };
   raf = requestAnimationFrame(frame);
 
-  return {
+  const api: CityScene = {
     focus: (key) => {
-      if (!walking) applyFocus(key, false);
+      if (!walking && !playing) applyFocus(key, false);
     },
     select: (id) => {
       selected = id;
@@ -507,6 +717,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     },
     startWalk: (events) => {
       if (reduceMotion) return false;
+      api.stopPlay();
       const ev: ExplorerEvents = {
         onStop: (id) => events.onStop(id as BuildingId),
         onLeave: (id) => events.onLeave(id as BuildingId),
@@ -556,5 +767,59 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       envMesh.geometry.dispose();
       renderer.dispose();
     },
+    startPlay: (h) => {
+      if (reduceMotion) return false;
+      api.stopWalk();
+      playH = h;
+      coinGot.fill(false);
+      coinTotal = 0;
+      coins.visible = true;
+      playing = true;
+      paused = false;
+      nearId = null;
+      walkOff = 0;
+      lite = true;
+      fx?.setLite(true);
+      layout();
+      explorer.startFree(-1.5, 1.4, Math.PI / 2);
+      h.onCoin(0, coinPts.length);
+      return true;
+    },
+    stopPlay: () => {
+      if (!playing) return;
+      playing = false;
+      lite = false;
+      explorer.stop();
+      explorer.setInput(0, 0, false);
+      coins.visible = false;
+      nearId = null;
+      keys.clear();
+      stick.x = 0;
+      stick.y = 0;
+      fx?.setLite(false);
+      layout();
+      applyFocus("home", false);
+    },
+    setPaused: (p) => {
+      paused = p;
+      if (p) {
+        stick.x = 0;
+        stick.y = 0;
+      }
+    },
+    setStick: (x, y) => {
+      stick.x = Math.max(-1, Math.min(1, x));
+      stick.y = Math.max(-1, Math.min(1, y));
+    },
+    jump: () => {
+      if (playing && !paused) explorer.jump();
+    },
+    setVisited: (ids) => {
+      visitedSet = new Set(ids);
+    },
+    setMinimap: (c) => {
+      mini = c;
+    },
   };
+  return api;
 }

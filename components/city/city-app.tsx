@@ -1,11 +1,67 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { jobs, person, skills } from "@/lib/content";
 import { projects, type Project } from "@/lib/projects";
 
 import { createCityScene, type BuildingId, type CityScene } from "./city-scene";
+
+function Stick({ onMove }: { onMove: (x: number, y: number) => void }) {
+  const knob = useRef<HTMLDivElement>(null);
+  const area = useRef<HTMLDivElement>(null);
+  const active = useRef(false);
+  const set = (e: ReactPointerEvent) => {
+    const el = area.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const R = r.width / 2;
+    let dx = (e.clientX - (r.left + R)) / R;
+    let dy = (e.clientY - (r.top + R)) / R;
+    const m = Math.hypot(dx, dy);
+    if (m > 1) {
+      dx /= m;
+      dy /= m;
+    }
+    if (knob.current) knob.current.style.transform = `translate(${dx * R * 0.55}px, ${dy * R * 0.55}px)`;
+    onMove(dx, -dy);
+  };
+  const end = () => {
+    active.current = false;
+    if (knob.current) knob.current.style.transform = "";
+    onMove(0, 0);
+  };
+  return (
+    <div
+      className="stick"
+      ref={area}
+      onPointerDown={(e) => {
+        active.current = true;
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          /* optional */
+        }
+        set(e);
+      }}
+      onPointerMove={(e) => {
+        if (active.current) set(e);
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
+      aria-hidden="true"
+    >
+      <div className="knob" ref={knob} />
+    </div>
+  );
+}
+
+const CONFETTI = Array.from({ length: 30 }, (_, i) => ({
+  left: (i * 37) % 100,
+  delay: ((i * 53) % 100) / 100,
+  dur: 2.2 + ((i * 29) % 10) / 8,
+  color: ["#f25c54", "#ffc83d", "#58c985", "#2f80c8", "#fff4e3"][i % 5],
+}));
 
 type View = "home" | "project" | "exp" | "skills" | "contact";
 type Tab = "home" | "exp" | "skills" | "contact";
@@ -24,6 +80,12 @@ export function CityApp() {
   const [glOk, setGlOk] = useState(true);
   const [night, setNight] = useState(false);
   const [touring, setTouring] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [near, setNear] = useState<BuildingId | null>(null);
+  const [coins, setCoins] = useState({ n: 0, total: 0 });
+  const [visited, setVisited] = useState<BuildingId[]>([]);
+  const [winSeen, setWinSeen] = useState(false);
+  const miniRef = useRef<HTMLCanvasElement>(null);
   const tourTimer = useRef(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -42,6 +104,12 @@ export function CityApp() {
     window.clearInterval(tourTimer.current);
     sceneRef.current?.stopWalk();
     setTouring(false);
+  }, []);
+
+  const stopPlay = useCallback(() => {
+    sceneRef.current?.stopPlay();
+    setPlaying(false);
+    setNear(null);
   }, []);
 
   const goHome = useCallback((fromDeck?: boolean) => {
@@ -78,7 +146,23 @@ export function CityApp() {
     [choose, stopTour],
   );
 
+  const startPlay = () => {
+    stopTour();
+    const ok = sceneRef.current?.startPlay({
+      onNear: setNear,
+      onInteract: (id) => choose(id),
+      onCoin: (n, total) => setCoins({ n, total }),
+    });
+    if (!ok) return;
+    setVisited([]);
+    setWinSeen(false);
+    setSelected(null);
+    setView("home");
+    setPlaying(true);
+  };
+
   const startTour = () => {
+    stopPlay();
     window.clearInterval(tourTimer.current);
     setTouring(true);
     const walked = sceneRef.current?.startWalk({
@@ -101,7 +185,16 @@ export function CityApp() {
   }, [night]);
   useEffect(() => {
     sceneRef.current?.setPanelOpen(view !== "home");
-  }, [view]);
+    sceneRef.current?.setPaused(playing && view !== "home");
+    sceneRef.current?.setMinimap(playing && view === "home" ? miniRef.current : null);
+  }, [view, playing]);
+  useEffect(() => {
+    sceneRef.current?.setVisited(visited);
+  }, [visited]);
+  useEffect(() => {
+    if (!playing || !selected) return;
+    setVisited((v) => (v.includes(selected) ? v : [...v, selected]));
+  }, [selected, playing]);
 
   const scrollDeckTo = useCallback((idx: number, smooth: boolean) => {
     const deck = deckRef.current;
@@ -215,7 +308,7 @@ export function CityApp() {
     : undefined;
 
   return (
-    <div className="city" data-gl={glOk ? "on" : "off"}>
+    <div className={`city${playing ? " playing" : ""}${selected ? " sel" : ""}`} data-gl={glOk ? "on" : "off"}>
       <canvas ref={canvasRef} id="scene" aria-hidden="true" />
       <div className="bars" aria-hidden="true" />
       <div className="intro" aria-hidden="true">
@@ -228,7 +321,7 @@ export function CityApp() {
           <button
             key={p.id}
             type="button"
-            className={selected === p.id ? "tag on" : "tag"}
+            className={`${selected === p.id ? "tag on" : "tag"}${playing && visited.includes(p.id) ? " done" : ""}`}
             ref={(el) => {
               tagRefs.current[p.id] = el;
             }}
@@ -240,6 +333,70 @@ export function CityApp() {
         ))}
       </div>
 
+      {playing && view === "home" ? (
+        <div className="hud">
+          <div className="hud-card">
+            <div className="hud-top">
+              <b>Explore the city</b>
+              <span>
+                {visited.length}/{projects.length}
+              </span>
+            </div>
+            <div className="hud-bar">
+              <i style={{ width: `${(visited.length / projects.length) * 100}%` }} />
+            </div>
+            <div className="hud-coins" key={coins.n}>
+              <span className="coin" />
+              {coins.n}
+              <small>/ {coins.total}</small>
+            </div>
+          </div>
+          <canvas ref={miniRef} className="hud-mini" width={300} height={300} aria-hidden="true" />
+          {near ? (
+            <button className="hud-act" type="button" onClick={() => choose(near)}>
+              Enter {projects.find((p) => p.id === near)?.name} <kbd>E</kbd>
+            </button>
+          ) : null}
+          <p className="hud-help">WASD or arrows to move · Shift to run · Space to jump · E to enter · coins are everywhere</p>
+          <Stick onMove={(x, y) => sceneRef.current?.setStick(x, y)} />
+          <button className="hud-jump" type="button" onPointerDown={() => sceneRef.current?.jump()}>
+            Jump
+          </button>
+        </div>
+      ) : null}
+
+      {playing && view === "home" && visited.length === projects.length && !winSeen ? (
+        <div className="hud-win" role="dialog" aria-label="City explored">
+          <div className="confetti" aria-hidden="true">
+            {CONFETTI.map((c, i) => (
+              <span
+                key={i}
+                style={{ left: `${c.left}%`, background: c.color, animationDelay: `${c.delay}s`, animationDuration: `${c.dur}s` }}
+              />
+            ))}
+          </div>
+          <h2>City explored!</h2>
+          <p>
+            You visited all {projects.length} projects and collected {coins.n} of {coins.total} coins.
+          </p>
+          <div className="row">
+            <button
+              className="pill"
+              type="button"
+              onClick={() => {
+                setWinSeen(true);
+                openTab("contact");
+              }}
+            >
+              Say hello
+            </button>
+            <button className="pill alt" type="button" onClick={() => setWinSeen(true)}>
+              Keep exploring
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mtop" ref={topRef}>
         <div className="brand">{person.name}</div>
         <div className="mstat">
@@ -249,6 +406,9 @@ export function CityApp() {
         <div className="mctl">
           <button type="button" onClick={touring ? stopTour : startTour}>
             {touring ? "Stop" : "Tour"}
+          </button>
+          <button type="button" aria-pressed={playing} onClick={playing ? stopPlay : startPlay}>
+            {playing ? "Exit" : "Play"}
           </button>
           <button type="button" aria-pressed={night} aria-label="Toggle night" onClick={() => setNight((v) => !v)}>
             {night ? "Dusk" : "Night"}
@@ -267,7 +427,10 @@ export function CityApp() {
         </nav>
         <div className="topctl">
           <button type="button" onClick={touring ? stopTour : startTour}>
-            {touring ? "Stop tour" : "Play tour"}
+            {touring ? "Stop tour" : "Guided tour"}
+          </button>
+          <button type="button" aria-pressed={playing} onClick={playing ? stopPlay : startPlay}>
+            {playing ? "Exit game" : "Play game"}
           </button>
           <button type="button" aria-pressed={night} onClick={() => setNight((v) => !v)}>
             {night ? "Dusk" : "Night"}
@@ -327,7 +490,10 @@ export function CityApp() {
             </ul>
 <div className="ctl">
               <button className="pill" type="button" onClick={touring ? stopTour : startTour}>
-                {touring ? "Stop tour" : "Play tour"}
+                {touring ? "Stop tour" : "Guided tour"}
+              </button>
+              <button className="pill alt" type="button" onClick={playing ? stopPlay : startPlay}>
+                {playing ? "Exit game" : "Play the city"}
               </button>
               <button className="pill alt" type="button" aria-pressed={night} onClick={() => setNight((v) => !v)}>
                 {night ? "Switch to dusk" : "Switch to night"}
