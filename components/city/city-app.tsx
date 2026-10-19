@@ -11,7 +11,7 @@ type View = "home" | "project" | "exp" | "skills" | "contact";
 type Tab = "home" | "exp" | "skills" | "contact";
 
 const tabs: { id: Tab; desktop: string; mobile: string }[] = [
-  { id: "home", desktop: "Overview", mobile: "Work" },
+  { id: "home", desktop: "Work", mobile: "Work" },
   { id: "exp", desktop: "Experience", mobile: "Experience" },
   { id: "skills", desktop: "Skills", mobile: "Skills" },
   { id: "contact", desktop: "Contact", mobile: "Contact" },
@@ -91,8 +91,11 @@ export function CityApp() {
 
   useEffect(() => () => window.clearInterval(tourTimer.current), []);
   useEffect(() => {
-    sceneRef.current?.setNight(night ? 1 : 0.38);
+    sceneRef.current?.setNight(night ? 1 : 0.22);
   }, [night]);
+  useEffect(() => {
+    sceneRef.current?.setPanelOpen(view !== "home");
+  }, [view]);
 
   const scrollDeckTo = useCallback((idx: number, smooth: boolean) => {
     const deck = deckRef.current;
@@ -247,7 +250,37 @@ export function CityApp() {
         </div>
       </div>
 
-      <aside className={sheetOpen ? "panel open" : "panel"} aria-label="Portfolio">
+      <header className="topnav">
+        <div className="brand">{person.name}</div>
+        <nav aria-label="Sections">
+          {tabs.map((t) => (
+            <button key={t.id} type="button" aria-pressed={activeTab === t.id} onClick={() => openTab(t.id)}>
+              {t.desktop}
+            </button>
+          ))}
+        </nav>
+        <div className="topctl">
+          <button type="button" onClick={touring ? stopTour : startTour}>
+            {touring ? "Stop tour" : "Play tour"}
+          </button>
+          <button type="button" aria-pressed={night} onClick={() => setNight((v) => !v)}>
+            {night ? "Dusk" : "Night"}
+          </button>
+        </div>
+      </header>
+
+      <div className="dock" role="group" aria-label="Projects">
+        {projects.map((p) => (
+          <button key={p.id} type="button" className={selected === p.id ? "on" : ""} onClick={() => pickManual(p.id)}>
+            {p.name}
+          </button>
+        ))}
+      </div>
+
+      <aside
+        className={`panel${sheetOpen ? " open" : ""}${view !== "home" ? " show" : ""}`}
+        aria-label="Portfolio"
+      >
         <div className="bar">
           <div className="brand">{person.name}</div>
           <button className="close" type="button" aria-label="Close" onClick={() => goHome()} />

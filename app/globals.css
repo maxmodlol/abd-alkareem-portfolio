@@ -14,9 +14,6 @@
   --butter: #ffe08a;
   --line: #e6d9c4;
   --mnav: 62px;
-  --display: var(--font-gabarito), "Trebuchet MS", Arial, sans-serif;
-  --body: var(--font-hanken), "Segoe UI", Arial, sans-serif;
-  --mono: var(--font-fragment), ui-monospace, Menlo, Consolas, monospace;
   color-scheme: light;
 }
 
@@ -28,6 +25,9 @@ body {
   height: 100%;
 }
 body {
+  --display: var(--font-gabarito), "Trebuchet MS", Arial, sans-serif;
+  --body: var(--font-hanken), "Segoe UI", Arial, sans-serif;
+  --mono: var(--font-fragment), ui-monospace, Menlo, Consolas, monospace;
   margin: 0;
   overflow: hidden;
   background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom));
@@ -705,5 +705,165 @@ h2 {
   .bars::after {
     animation: none;
     display: none;
+  }
+}
+
+/* desktop layout: floating top bar, project dock, and a glass detail card that only opens on demand */
+.topnav,
+.dock {
+  display: none;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (min-width: 760px) {
+  .tabs {
+    display: none;
+  }
+  .topnav {
+    display: flex;
+    position: fixed;
+    z-index: 6;
+    left: 24px;
+    right: 24px;
+    top: 20px;
+    align-items: center;
+    gap: 14px;
+    padding: 7px 8px 7px 22px;
+    border-radius: 999px;
+    background: rgba(11, 48, 57, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--paper);
+    animation: rise 0.8s ease 5.4s both;
+  }
+  .topnav .brand {
+    margin-right: auto;
+    color: var(--paper);
+    font-size: 16px;
+  }
+  .topnav nav,
+  .topctl {
+    display: flex;
+    gap: 4px;
+  }
+  .topnav button,
+  .dock button {
+    border: 0;
+    background: transparent;
+    color: #d9eef0;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .topnav button:hover,
+  .dock button:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .topnav button[aria-pressed="true"] {
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .topctl button {
+    border: 1px solid rgba(255, 255, 255, 0.22);
+  }
+  .dock {
+    display: flex;
+    position: fixed;
+    z-index: 6;
+    left: 0;
+    right: 0;
+    bottom: 22px;
+    margin-inline: auto;
+    width: max-content;
+    max-width: calc(100% - 48px);
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 999px;
+    background: rgba(11, 48, 57, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    animation: rise 0.8s ease 5.6s both;
+  }
+  .dock button.on {
+    background: var(--coral);
+    color: #fff;
+  }
+
+  .panel {
+    --ink: #fff8ee;
+    --paper: #0b3039;
+    --mute: #b9d3d6;
+    --line: rgba(255, 255, 255, 0.14);
+    left: 24px;
+    top: 86px;
+    width: min(380px, calc(100% - 48px));
+    max-height: calc(100% - 86px - 92px);
+    background: rgba(11, 48, 57, 0.78);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--ink);
+    border-radius: 22px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-14px);
+    transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s 0.35s;
+  }
+  .panel.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s;
+  }
+  .panel .bar {
+    justify-content: flex-end;
+    padding: 12px 14px 0;
+  }
+  .panel .bar .brand {
+    display: none;
+  }
+  .panel .close {
+    display: block;
+    width: 34px;
+    height: 34px;
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+  .panel .close::before,
+  .panel .close::after {
+    background: var(--ink);
+  }
+  .panel .views {
+    padding: 4px 22px 22px;
+  }
+  .panel .pill.alt:hover {
+    color: #0f2229;
+  }
+}
+@media (max-width: 1199px) {
+  .foot {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .topnav,
+  .dock {
+    animation: none;
   }
 }

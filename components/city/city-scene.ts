@@ -33,6 +33,8 @@ export type CityScene = {
   relayout: () => void;
   /** 0 is golden hour, 1 is deep night. */
   setNight: (n: number) => void;
+  /** Shifts the island sideways on desktop while the detail card is open. */
+  setPanelOpen: (open: boolean) => void;
   dispose: () => void;
 };
 
@@ -190,6 +192,9 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   let selected: BuildingId | null = null;
   let hoverId: BuildingId | null = null;
   let nightNow = 0;
+  let panelOpen = false;
+  let offX = 0;
+  let offGoal = 0;
   let nightGoal = DUSK;
   let fx: ReturnType<typeof createFx> = null;
 
@@ -226,7 +231,9 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     camera.clearViewOffset();
     if (!narrow) {
       freeFrac = 1;
-      camera.setViewOffset(w, h, -Math.min(210, w * 0.14), 0, w, h);
+      offGoal = panelOpen ? -Math.min(190, w * 0.13) : 0;
+      offX = reduceMotion ? offGoal : offX;
+      camera.setViewOffset(w, h, offX, 0, w, h);
     } else {
       freeFrac = Math.max(0.3, (m.deckTop - m.topH) / h);
       camera.setViewOffset(w, h, 0, (h - m.deckTop - m.topH) / 2, w, h);
@@ -401,6 +408,10 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       cam.t.z + Math.cos(yaw) * cp * dist,
     );
     camera.lookAt(cam.t);
+    if (!narrow && Math.abs(offGoal - offX) > 0.3) {
+      offX += (offGoal - offX) * 0.1;
+      camera.setViewOffset(window.innerWidth, window.innerHeight, offX, 0, window.innerWidth, window.innerHeight);
+    }
     if (Math.abs(camera.fov - cam.fov) > 0.01) {
       camera.fov = cam.fov;
       camera.updateProjectionMatrix();
@@ -447,6 +458,10 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       selected = id;
     },
     relayout: layout,
+    setPanelOpen: (open) => {
+      panelOpen = open;
+      layout();
+    },
     setNight: (n) => {
       nightGoal = Math.min(1, Math.max(0, n));
     },
