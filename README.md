@@ -11,7 +11,7 @@ A portfolio you explore instead of scroll: a small tropical island city where ev
 
 ## Where things live
 
-- `lib/projects.ts`: the five products (VillageWellth, Sahefa, DIWAN, Oliva, Watan). The `id` of each project is also the key of its building in the scene.
+- `lib/projects.ts`: the eight products (VillageWellth, Sahefa, DIWAN, Oliva, Watan, CareBooks, Arvo, SGSoft). The `id` of each project is also the key of its building in the scene.
 - `lib/content.ts`: experience, skills and contact links.
 - `components/city/city-scene.ts`: the three.js scene, camera rig and input. It loads as its own chunk after the page has painted.
 - `components/city/city-app.tsx`: the panel, tabs, phone deck and state.

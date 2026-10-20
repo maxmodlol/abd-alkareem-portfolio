@@ -801,4 +801,111 @@ export function buildArvo(kit: Kit, folks: Folks, island: THREE.Group, label: st
   return g;
 }
 
+/* ------------------------------------------------------------------ */
+/* SGSoft: an IoT energy tower. Live meter bars on the front, solar panels and turbines on the     */
+/* roof, and a sensor hub that pings the rest of the city.                                         */
+/* ------------------------------------------------------------------ */
+export function buildSgsoft(kit: Kit, folks: Folks, island: THREE.Group, at: [number, number], rot: number): THREE.Group {
+  const g = newGroup(island, "sgsoft", at[0], at[1], rot);
+  const W = 1.8;
+  const H = 6.2;
+  const glow = kit.glowMat(0x5ff7c0, 0.8, 2.6, 0x103a2c);
+
+  /* lobby: dark glass with a glowing band and the name over the door */
+  kit.box(g, W + 0.3, 0.75, W + 0.3, kit.mat(0x22343c, 0.25, 0.5), 0, 0, 0);
+  kit.box(g, W + 0.34, 0.06, W + 0.34, glow, 0, 0.6, 0, false);
+  kit.box(g, 0.6, 0.5, 0.04, kit.glowMat(0xbff8ff, 0.6, 1.8, 0x203a40), 0, 0, W / 2 + 0.16, false);
+  const sign = kit.sign("SGSoft", 1.3, 0.32, { fg: "#5ff7c0", bg: "#0f2229", day: 0.6, night: 2.6 });
+  sign.position.set(0, 0.95, W / 2 + 0.17);
+  g.add(sign);
+
+  /* the tower */
+  const fac = kit.facade("#e6f0ec", { cols: 6, rows: 14, seed: 808, glass: "#2fa59a", lit: 0.55, night: 2.4 });
+  kit.box(g, W, H - 0.75, W, kit.sides(fac, kit.mat(0xd2e0da, 0.7)), 0, 0.75, 0);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) kit.box(g, 0.07, H - 0.8, 0.07, glow, (sx * W) / 2, 0.78, (sz * W) / 2, false);
+  }
+
+  /* live consumption: two meters on the front whose segments rise and fall */
+  const segOff = kit.mat(0x1d2f36, 0.4);
+  const segCols = [0x5ff7c0, 0x5ff7c0, 0x5ff7c0, 0x9cf26b, 0x9cf26b, 0xd8ee5a, 0xffd25a, 0xffb04a, 0xff8a4a, 0xff5c5c];
+  const segOn = segCols.map((c) => kit.glowMat(c, 1.1, 2.8, 0x1a1a1a));
+  const meters: THREE.Mesh[][] = [-0.5, 0.5].map((mx) => {
+    kit.box(g, 0.28, 4.3, 0.04, kit.mat(0x0f2229, 0.4), mx, 1.15, W / 2 + 0.01, false);
+    return segCols.map((_, i) => kit.box(g, 0.2, 0.33, 0.03, segOff, mx, 1.24 + i * 0.42, W / 2 + 0.035, false));
+  });
+
+  /* roof: tilted solar panels, two small wind turbines and the sensor hub */
+  const roofY = H;
+  kit.box(g, W + 0.06, 0.12, W + 0.06, kit.mat(0xc9d6d0, 0.6), 0, roofY, 0);
+  const cells = canvasTex(128, 128, (c, w, h) => {
+    c.fillStyle = "#1a3a6b";
+    c.fillRect(0, 0, w, h);
+    c.strokeStyle = "rgba(170,210,255,0.55)";
+    c.lineWidth = 2;
+    for (let i = 0; i <= 4; i++) {
+      c.beginPath();
+      c.moveTo((i * w) / 4, 0);
+      c.lineTo((i * w) / 4, h);
+      c.moveTo(0, (i * h) / 4);
+      c.lineTo(w, (i * h) / 4);
+      c.stroke();
+    }
+  });
+  const panelMat = new THREE.MeshStandardMaterial({ map: cells, roughness: 0.25, metalness: 0.5 });
+  for (let k = 0; k < 3; k++) {
+    const p = kit.box(g, 0.45, 0.03, 0.75, panelMat, -0.55 + k * 0.55, roofY + 0.32, 0.35);
+    p.rotation.x = -0.45;
+    kit.box(g, 0.03, 0.28, 0.03, 0x9aa7b0, -0.55 + k * 0.55, roofY + 0.12, 0.55, false);
+  }
+  const rotors: THREE.Group[] = [];
+  const white = kit.mat(0xf4f7f6, 0.5);
+  ([-0.6, 0.6] as const).forEach((tx) => {
+    kit.cyl(g, 0.025, 0.035, 1.1, white, tx, roofY + 0.12, -0.55, 8);
+    const hub = new THREE.Group();
+    hub.position.set(tx, roofY + 1.22, -0.48);
+    g.add(hub);
+    kit.ball(hub, 0.05, white, 0, 0, 0, 8, false);
+    for (let b = 0; b < 3; b++) {
+      const blade = kit.box(hub, 0.05, 0.42, 0.015, white, 0, 0, 0.02, false);
+      blade.position.set(Math.sin((b * Math.PI * 2) / 3) * 0.21, Math.cos((b * Math.PI * 2) / 3) * 0.21, 0.02);
+      blade.rotation.z = -(b * Math.PI * 2) / 3;
+    }
+    rotors.push(hub);
+  });
+  kit.cyl(g, 0.12, 0.16, 0.35, 0xdfe7ec, 0, roofY + 0.12, -0.1, 12);
+  kit.cyl(g, 0.015, 0.015, 0.7, 0x9aa7b0, 0, roofY + 0.47, -0.1, 6, false);
+  const tip = kit.ball(g, 0.06, glow, 0, roofY + 1.2, -0.1, 8, false);
+  const pingMat = additive(0x5ff7c0, 0.5, 1.4);
+  const pings = [0, 1, 2].map(() => {
+    const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 6, 48), pingMat.clone());
+    r.rotation.x = Math.PI / 2;
+    r.position.set(0, roofY + 1.2, -0.1);
+    g.add(r);
+    return r;
+  });
+
+  folks.person(g, "stand", 0.55, 0, W / 2 + 0.55, Math.PI * 0.9, { prop: "bag" });
+  folks.person(g, "stand", -0.6, 0, W / 2 + 0.5, Math.PI * 1.1);
+  kit.lamp(g, 1.25, W / 2 + 0.5, 1.1);
+  kit.hit(g, W + 0.4, H + 1.4, W + 0.4, (H + 1.4) / 2, 0);
+
+  /* a slow, believable load curve: a daily swell with a little flicker */
+  const level = (t: number, k: number) => 0.55 + Math.sin(t * 0.45 + k * 1.7) * 0.25 + Math.sin(t * 2.3 + k) * 0.08;
+  kit.anims.push((t, dt) => {
+    meters.forEach((segs, k) => {
+      const lit = Math.round(level(t, k) * segs.length);
+      segs.forEach((m, i) => (m.material = i < lit ? segOn[i] : segOff));
+    });
+    rotors.forEach((r, i) => (r.rotation.z -= dt * (2.4 + i * 0.6)));
+    pings.forEach((r, i) => {
+      const u = (t * 0.5 + i / 3) % 1;
+      r.scale.setScalar(0.2 + u * 3.2);
+      (r.material as THREE.MeshBasicMaterial).opacity = (1 - u) * 0.55;
+    });
+    tip.scale.setScalar(1 + Math.sin(t * 4) * 0.2);
+  });
+  return g;
+}
+
 export const BUILDING_ACCENT = { coral: CORAL, ink: INK };

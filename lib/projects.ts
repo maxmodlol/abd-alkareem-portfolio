@@ -1,6 +1,6 @@
 export type Project = {
   /** Also the key of the matching building in the 3D scene. */
-  id: "villagewellth" | "sahefa" | "diwan" | "oliva" | "watan" | "carebooks" | "arvo";
+  id: "villagewellth" | "sahefa" | "diwan" | "oliva" | "watan" | "carebooks" | "arvo" | "sgsoft";
   /** Product name. */
   name: string;
   /** Short floating label on the island. */
@@ -76,5 +76,14 @@ export const projects: Project[] = [
     short: "Pick a bundle or shop by fashion",
     text: "An online clothing and fashion shop where customers build their own bundle, or simply shop by fashion.",
     stack: ["Next.js", "Supabase"],
+  },
+  {
+    id: "sgsoft",
+    name: "SGSoft",
+    tag: "SGSoft",
+    kind: "IoT energy management SaaS",
+    short: "Live energy use and control for buildings",
+    text: "An IoT SaaS that reads the meters and sensors across a building, shows its energy consumption live and controls the energy level of each part of it. Node.js microservices behind a NestJS API, with an Angular dashboard.",
+    stack: ["Angular", "NestJS", "Node.js", "Microservices", "IoT"],
   },
 ];

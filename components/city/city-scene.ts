@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { buildArvo, buildCarebooks, buildDiwan, buildOliva, buildSahefa, buildVillageWellth, buildWatan } from "./buildings";
+import { buildArvo, buildCarebooks, buildDiwan, buildOliva, buildSahefa, buildSgsoft, buildVillageWellth, buildWatan } from "./buildings";
 import { Explorer, type ExplorerEvents, type HeroFx, type RoutePoint } from "./explorer";
 import { createFx } from "./fx";
 import { Kit, type BuildingId } from "./kit";
@@ -10,7 +10,7 @@ import { Folks } from "./people";
 import { Sfx } from "./sfx";
 import { Traffic } from "./traffic";
 import { createPhysicalSky, makeArcs, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
-import { makeCoast, makeDowntown, makeIslets, Palms } from "./coast";
+import { grassR, makeCoast, makeDowntown, makeIslets, Palms, SGSOFT_POS, SGSOFT_ROT, type Solid } from "./coast";
 import { setTextureDetail } from "./textures";
 
 export type { BuildingId };
@@ -78,6 +78,7 @@ const TAG_HEIGHT: Record<BuildingId, number> = {
   watan: 4.9,
   carebooks: 4.4,
   arvo: 4.2,
+  sgsoft: 4.9,
 };
 
 const BUILDING_POS: Record<BuildingId, [number, number]> = {
@@ -88,6 +89,7 @@ const BUILDING_POS: Record<BuildingId, [number, number]> = {
   watan: [-8.2, 0],
   carebooks: [9.0, 2.6],
   arvo: [9.0, -2.6],
+  sgsoft: SGSOFT_POS,
 };
 
 /** Daytime is clear tropical noon; 1 is night. */
@@ -115,6 +117,7 @@ const RADIUS: Record<BuildingId, number> = {
   watan: 1.2,
   carebooks: 1.6,
   arvo: 1.6,
+  sgsoft: 1.35,
 };
 
 /* the guided walk: pavement on both sides of the main road, one stop in front of each building */
@@ -126,6 +129,12 @@ const WALK_ROUTE: RoutePoint[] = [
   { at: [4.6, 1.4], stop: { id: "oliva", look: [4.6, 4.6] } },
   { at: [-4.6, 1.4], stop: { id: "diwan", look: [-4.6, 4.6] } },
   { at: [-6.4, 1.4], stop: { id: "watan", look: [-8.2, 0] } },
+  { at: [-6.4, -1.4] },
+  { at: [-7.7, -4.3] },
+  { at: [-7.7, -8.4] },
+  { at: [-5.5, -9.1], stop: { id: "sgsoft", look: SGSOFT_POS } },
+  { at: [-7.7, -8.4] },
+  { at: [-7.7, -4.3] },
   { at: [-6.4, -1.4] },
 ];
 
@@ -204,9 +213,9 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   scene.add(island);
   const sea = makeSea(scene);
   const palms = new Palms();
-  makeCoast(kit, island, palms);
+  const extraSolids: Solid[] = makeCoast(kit, island, palms);
   makeIslets(kit, scene, palms);
-  makeDowntown(kit, island, palms);
+  extraSolids.push(...makeDowntown(kit, island, palms));
   buildVillageWellth(kit, folks, island);
   buildSahefa(kit, folks, island);
   buildDiwan(kit, folks, island);
@@ -214,6 +223,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   const watan = buildWatan(kit, folks, island);
   buildCarebooks(kit, folks, island, "CareBooks");
   buildArvo(kit, folks, island, "Arvo");
+  buildSgsoft(kit, folks, island, SGSOFT_POS, SGSOFT_ROT);
   traffic.zones.push({ axis: "x", dir: -1, stop: -7.55, red: () => !watan.gate.open });
   traffic.zones.push({ axis: "x", dir: 1, stop: -8.85, red: () => !watan.gate.open });
   makeStreets(kit, island, traffic, folks, palms);
@@ -226,6 +236,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     watan: new THREE.Vector3(-8.2, 4.4, 0),
     carebooks: new THREE.Vector3(9.0, 3.6, 2.6),
     arvo: new THREE.Vector3(9.0, 3.4, -2.6),
+    sgsoft: new THREE.Vector3(SGSOFT_POS[0], 7.6, SGSOFT_POS[1]),
   });
   makeSkyLife(kit, scene);
   const explorer = new Explorer(kit, island, WALK_ROUTE);
@@ -235,6 +246,8 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     RADIUS[id],
   ]);
   explorer.cars = () => traffic.probe();
+  /* the whole lawn is walkable, downtown included, up to a step from the sand */
+  explorer.edge = (a) => grassR(a) - 0.55;
   const particles = new Particles(island, startNarrow);
   const sfx = new Sfx();
 
@@ -310,6 +323,16 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       meshes.push(m);
     });
     solidSets.push({ x: BUILDING_POS[id][0], z: BUILDING_POS[id][1], r: RADIUS[id] + 0.6, meshes });
+  }
+  /* downtown towers and the road portals are solid too */
+  for (const s of extraSolids) {
+    const meshes: THREE.Mesh[] = [];
+    s.obj.traverse((o) => {
+      const m = o as THREE.Mesh;
+      const mat = m.isMesh ? (Array.isArray(m.material) ? m.material[0] : m.material) : null;
+      if (mat && mat.visible && !mat.transparent) meshes.push(m);
+    });
+    solidSets.push({ x: s.x, z: s.z, r: s.r, meshes });
   }
 
   /* bounce pads, gems above them and coins on the roofs you can reach with them */
@@ -484,6 +507,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     carebooks: { t: [9.0, 1.3, 2.6], d: 16, yaw: Math.PI * 0.92, pitch: 0.36, w: 3.8, hh: 3.2 },
     arvo: { t: [9.0, 1.3, -2.6], d: 16, yaw: 0.2, pitch: 0.36, w: 3.8, hh: 3.2 },
     watan: { t: [-8.2, 1.5, 0], d: 15, yaw: Math.PI / 2, pitch: 0.34, w: 4.8, hh: 3.4 },
+    sgsoft: { t: [SGSOFT_POS[0], 3.4, SGSOFT_POS[1]], d: 20, yaw: SGSOFT_ROT + 0.5, pitch: 0.3, w: 4.2, hh: 5.4 },
   };
 
   const cam = { yaw: 0.2, pitch: 0.5, dist: 40, fov: 34, t: new THREE.Vector3(0, 0, 0) };
@@ -723,7 +747,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     const ctx = mini.getContext("2d");
     if (!ctx) return;
     const S = mini.width;
-    const sc = S / 25;
+    const sc = S / 38;
     const cy = Math.cos(cam.yaw);
     const sy = Math.sin(cam.yaw);
     const P = (x: number, z: number): [number, number] => [S / 2 + (x * cy - z * sy) * sc, S / 2 + (x * sy + z * cy) * sc];
@@ -732,13 +756,21 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     ctx.beginPath();
     ctx.arc(S / 2, S / 2, S / 2 - 1, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = "rgba(11,48,57,0.88)";
+    ctx.fillStyle = "rgba(20,130,170,0.9)";
     ctx.fillRect(0, 0, S, S);
-    const [ox, oz] = P(0, 0);
-    ctx.fillStyle = "#3f7a52";
-    ctx.beginPath();
-    ctx.arc(ox, oz, 11 * sc, 0, Math.PI * 2);
-    ctx.fill();
+    /* the island's real outline: sand, then lawn */
+    for (const [col, off] of [["#d9b06a", 1.7], ["#3f7a52", 0]] as const) {
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      for (let i = 0; i <= 72; i++) {
+        const an = (i / 72) * Math.PI * 2;
+        const r = grassR(an) + off;
+        const q = P(Math.cos(an) * r, Math.sin(an) * r);
+        if (i === 0) ctx.moveTo(q[0], q[1]);
+        else ctx.lineTo(q[0], q[1]);
+      }
+      ctx.fill();
+    }
     ctx.strokeStyle = "#5b6770";
     ctx.lineWidth = 2 * sc;
     ctx.beginPath();

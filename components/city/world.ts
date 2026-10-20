@@ -408,6 +408,9 @@ export function makeArcs(kit: Kit, island: THREE.Group, points: Record<string, T
     ["carebooks", "oliva"],
     ["arvo", "sahefa"],
     ["arvo", "carebooks"],
+    ["sgsoft", "villagewellth"],
+    ["sgsoft", "watan"],
+    ["sgsoft", "sahefa"],
   ];
   const lineMat = new THREE.MeshBasicMaterial({
     color: new THREE.Color(0xff8a6a).multiplyScalar(1.5),

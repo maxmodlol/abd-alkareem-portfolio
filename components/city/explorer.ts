@@ -62,6 +62,8 @@ export class Explorer {
   colliders: [number, number, number][] = [];
   /** He cannot walk further than this from the centre of the island. */
   bound = 9.8;
+  /** How far from the centre the ground reaches at angle a (atan2(z, x)). Defaults to the round bound. */
+  edge: (a: number) => number = () => this.bound;
   /** Height of whatever solid sits at (x, z), 0 for open ground. Set by the scene. */
   solid: (x: number, z: number) => number = () => 0;
   /** Bounce pads [x, z]. */
@@ -418,11 +420,12 @@ export class Explorer {
       if (this.dashT > 0) this.dashT = 0;
     }
     const r = Math.hypot(this.x, this.z);
-    if (r > this.bound) {
-      this.x *= this.bound / r;
-      this.z *= this.bound / r;
-      const nxr = this.x / this.bound;
-      const nzr = this.z / this.bound;
+    const lim = this.edge(Math.atan2(this.z, this.x));
+    if (r > lim) {
+      this.x *= lim / r;
+      this.z *= lim / r;
+      const nxr = this.x / lim;
+      const nzr = this.z / lim;
       const out = this.vx * nxr + this.vz * nzr;
       if (out > 0) {
         this.vx -= out * nxr;

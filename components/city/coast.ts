@@ -13,6 +13,18 @@ import { grassMaps, pavingMaps } from "./textures";
 export const SEA_Y = -0.45;
 /** Direction of the downtown lobe, behind the projects as seen from the opening shot. */
 export const DOWNTOWN_A = 3.927;
+/** SGSoft's energy tower stands at the front of downtown, beside VillageWellth rather than behind it. */
+const SG_U = 12.1;
+const SG_V = 3.0;
+export const SGSOFT_POS: [number, number] = [
+  Math.cos(DOWNTOWN_A) * SG_U - Math.sin(DOWNTOWN_A) * SG_V,
+  Math.sin(DOWNTOWN_A) * SG_U + Math.cos(DOWNTOWN_A) * SG_V,
+];
+/** Turned so its front, with the energy meters, faces the middle of the island. */
+export const SGSOFT_ROT = Math.atan2(-SGSOFT_POS[0], -SGSOFT_POS[1]);
+
+/** Something the game character can stand on or walk into: a centre, a reach and the meshes to test. */
+export type Solid = { x: number; z: number; r: number; obj: THREE.Object3D };
 const LOBE = 7.0;
 const LOBE_W = 0.45;
 
@@ -95,7 +107,8 @@ export class Palms {
 /* ------------------------------------------------------------------ */
 /* Lawn, beach, gates, piers and beach life                                                        */
 /* ------------------------------------------------------------------ */
-export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): void {
+export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): Solid[] {
+  const solids: Solid[] = [];
   const N = 220;
 
   /* the lawn: one flat shape following the shoreline formula */
@@ -292,6 +305,7 @@ export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): void {
     g.position.set(axis === "x" ? s * 10.6 : 0, 0, axis === "z" ? s * 10.6 : 0);
     g.rotation.y = axis === "x" ? Math.PI / 2 : 0;
     island.add(g);
+    solids.push({ x: g.position.x, z: g.position.z, r: 1.9, obj: g });
     kit.box(g, 2.5, 1.35, 1.2, frame, 0, 0, 0);
     kit.box(g, 2.6, 0.08, 1.3, trim, 0, 1.35, 0, false);
     const hole = new THREE.Mesh(new THREE.PlaneGeometry(1.75, 0.95), holeMat);
@@ -309,6 +323,7 @@ export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): void {
   kit.anims.push((_t, dt) => {
     swirl.rotation -= dt * 0.9;
   });
+  return solids;
 }
 
 /* ------------------------------------------------------------------ */
@@ -360,7 +375,8 @@ const STYLES: TowerStyle[] = [
   { base: "#e3d6bf", glass: "#3b8fd0", roof: 0xd2c3a8 },
 ];
 
-export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): void {
+export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): Solid[] {
+  const solids: Solid[] = [];
   const ax = Math.cos(DOWNTOWN_A);
   const az = Math.sin(DOWNTOWN_A);
   const at = (u: number, v: number): [number, number] => [ax * u - az * v, az * u + ax * v];
@@ -380,12 +396,10 @@ export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): void 
   /* u along the lobe, v across it; w, d footprint; h height; style; extra */
   const towers: [number, number, number, number, number, number, "" | "spire" | "ring" | "antenna"][] = [
     [11.9, -2.9, 1.5, 1.5, 6.4, 0, "antenna"],
-    [12.1, 3.0, 1.4, 1.6, 8.0, 1, "ring"],
     [14.6, -4.1, 1.4, 1.4, 5.2, 3, ""],
     [14.6, 4.1, 1.5, 1.5, 9.2, 0, "antenna"],
     [16.3, -1.7, 1.8, 1.8, 10.2, 4, "spire"],
     [16.5, 2.1, 1.3, 1.3, 7.2, 2, "ring"],
-    [11.2, 0.1, 1.1, 1.1, 3.8, 3, ""],
     [17.2, 0.3, 1.0, 1.0, 4.6, 1, ""],
   ];
   towers.forEach(([u, v, w, d, h, si, extra], i) => {
@@ -394,6 +408,7 @@ export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): void 
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     island.add(g);
+    solids.push({ x, z, r: Math.max(w, d) * 0.75 + 0.6, obj: g });
     const fac = kit.facade(st.base, {
       cols: Math.max(3, Math.round(w * 3.2)),
       rows: Math.round(h * 2.4),
@@ -460,12 +475,12 @@ export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): void 
       const [tx, tz] = at(u, v);
       return Math.hypot(tx - x, tz - z) < w * 0.9 + 0.5;
     })) continue;
-    if (Math.hypot(x - px, z - pz) < 2) continue;
+    if (Math.hypot(x - px, z - pz) < 2 || Math.hypot(x - SGSOFT_POS[0], z - SGSOFT_POS[1]) < 2) continue;
     const m = kit.put(island, leafBlob(i % 6, 2), bush, x, 0.12, z);
     m.scale.set(0.32, 0.24, 0.32);
   }
 
-  /* hover cars on a loop through the skyline */
+  /* hover cars on a loop through the skyline, above SGSoft's turbines */
   const cars: { g: THREE.Group; ph: number; sp: number; y: number }[] = [];
   const carCols = [0xf25c54, 0xffffff, 0xffc83d, 0x2f9fd8];
   carCols.forEach((c, i) => {
@@ -478,7 +493,7 @@ export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): void 
     const under = kit.put(g, new THREE.CircleGeometry(0.14, 16), glow, 0, -0.09, 0, false);
     under.rotation.x = Math.PI / 2;
     kit.box(g, 0.2, 0.04, 0.04, glow, 0, -0.02, -0.29, false);
-    cars.push({ g, ph: (i / carCols.length) * Math.PI * 2, sp: i % 2 ? 0.32 : -0.26, y: 4.4 + i * 0.75 });
+    cars.push({ g, ph: (i / carCols.length) * Math.PI * 2, sp: i % 2 ? 0.32 : -0.26, y: 8.7 + i * 0.45 });
   });
   const [cx, cz] = at(14.4, 0);
   const tmp = new THREE.Vector3();
@@ -505,4 +520,5 @@ export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): void 
       c.g.rotation.z = -0.25 * Math.sign(c.sp);
     });
   });
+  return solids;
 }
