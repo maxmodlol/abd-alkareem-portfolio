@@ -92,7 +92,7 @@ export function createFx(
       vertexShader: GRADE.vertexShader,
       fragmentShader: GRADE.fragmentShader,
     });
-    grade.uniforms.uTilt.value = o.tilt * 0.4;
+    grade.uniforms.uTilt.value = o.tilt * 0.15;
     grade.uniforms.uRes.value.set(size.x * pr, size.y * pr);
     composer.addPass(renderPass);
     /* ambient occlusion: soft contact shadows where walls meet the ground and under the trees */
@@ -119,7 +119,7 @@ export function createFx(
       setLite(on) {
         bloom.enabled = !on;
         if (gtao) gtao.enabled = !on;
-        grade.uniforms.uTilt.value = on ? 0 : o.tilt * 0.4;
+        grade.uniforms.uTilt.value = on ? 0 : o.tilt * 0.15;
       },
       setNight(n) {
         bloom.strength = 0.25 + n * 0.3;

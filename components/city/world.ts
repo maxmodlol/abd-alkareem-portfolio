@@ -1,7 +1,9 @@
 import * as THREE from "three";
 
 import { canvasTex, rng, type Kit } from "./kit";
-import { windify } from "./nature";
+import { boulder, leafBlob, pineTier, windify } from "./nature";
+import { Sky as PhysicalSky } from "three/examples/jsm/objects/Sky.js";
+import { asphaltMaps, grassMaps, pavingMaps, rippleNormal, rockMaps, worldUV } from "./textures";
 import type { Folks } from "./people";
 import type { Traffic } from "./traffic";
 
@@ -68,12 +70,40 @@ export type Sky = {
   update: (night: number, sunDir: THREE.Vector3, cam: THREE.Vector3) => void;
 };
 
+/** The Preetham daylight model: real scattering at golden hour. alpha fades it into the night sky. */
+export function createPhysicalSky(): { mesh: PhysicalSky; set: (sunDir: THREE.Vector3, alpha: number) => void } {
+  const mesh = new PhysicalSky();
+  const m = mesh.material as THREE.ShaderMaterial;
+  m.uniforms.uAlpha = { value: 1 };
+  m.uniforms.uGain = { value: 0.62 };
+  m.fragmentShader = m.fragmentShader
+    .replace("uniform vec3 up;", "uniform vec3 up;\nuniform float uAlpha;\nuniform float uGain;")
+    .replace("gl_FragColor = vec4( retColor, 1.0 );", "gl_FragColor = vec4( retColor * uGain, uAlpha );");
+  m.transparent = true;
+  m.uniforms.turbidity.value = 6.5;
+  m.uniforms.rayleigh.value = 1.6;
+  m.uniforms.mieCoefficient.value = 0.006;
+  m.uniforms.mieDirectionalG.value = 0.86;
+  mesh.scale.setScalar(440);
+  mesh.frustumCulled = false;
+  return {
+    mesh,
+    set(sunDir, alpha) {
+      (m.uniforms.sunPosition.value as THREE.Vector3).copy(sunDir);
+      m.uniforms.uAlpha.value = alpha;
+    },
+  };
+}
+
 export function makeSky(scene: THREE.Scene): Sky {
   const mat = createSkyMaterial();
   const dome = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), mat);
   dome.renderOrder = -10;
   dome.frustumCulled = false;
   scene.add(dome);
+  const phys = createPhysicalSky();
+  phys.mesh.renderOrder = -9;
+  scene.add(phys.mesh);
 
   const R = rng(99);
   const n = 1100;
@@ -112,6 +142,8 @@ export function makeSky(scene: THREE.Scene): Sky {
       u.uSunPower.value = 1 - night * 0.55;
       fog.copy(u.uHor.value as THREE.Color);
       dome.position.copy(cam);
+      phys.mesh.position.copy(cam);
+      phys.set(sunDir, Math.max(0, 1 - night * 1.6));
       stars.position.copy(cam);
       starMat.opacity = Math.max(0, night * 1.2 - 0.25);
     },
@@ -128,7 +160,15 @@ export function makeSea(scene: THREE.Scene, island: THREE.Group): Sea {
   const seg = 150;
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x2a8f9a, roughness: 0.22, metalness: 0.18, flatShading: true });
+  const ripples = rippleNormal(70);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x1b6a78,
+    roughness: 0.07,
+    metalness: 0.05,
+    normalMap: ripples,
+    normalScale: new THREE.Vector2(0.55, 0.55),
+    envMapIntensity: 1.5,
+  });
   /* the swell runs on the GPU: crests catch a lighter tint and a glint of foam near the island */
   const seaU = { uTime: { value: 0 }, uCrest: { value: new THREE.Color(0x9fe3e0) }, uNight: { value: 0 } };
   mat.onBeforeCompile = (sh) => {
@@ -150,6 +190,14 @@ export function makeSea(scene: THREE.Scene, island: THREE.Group): Sea {
         transformed.y += h;
         vWave = h;
         vRad = length(position.xz);`,
+      )
+      .replace(
+        "#include <beginnormal_vertex>",
+        `#include <beginnormal_vertex>
+        /* slope of the swell, so the smooth normals follow it */
+        float sdx = cos(position.x * 0.35 + uTime * 0.9) * 0.035 + cos((position.x + position.z) * 0.2 + uTime * 0.5) * 0.024;
+        float sdz = -sin(position.z * 0.3 + uTime * 0.7) * 0.027 + cos((position.x + position.z) * 0.2 + uTime * 0.5) * 0.024;
+        objectNormal = normalize(vec3(-sdx, 1.0, -sdz));`,
       );
     sh.fragmentShader = sh.fragmentShader
       .replace(
@@ -166,6 +214,16 @@ export function makeSea(scene: THREE.Scene, island: THREE.Group): Sea {
         float shore = (1.0 - smoothstep(11.8, 14.5, vRad)) * smoothstep(0.55, 1.0, 0.5 + 0.5 * sin(vRad * 4.0 - uTime * 1.6));
         diffuseColor.rgb = mix(diffuseColor.rgb, uCrest * (1.0 - uNight * 0.7), clamp(crest * 0.35 + shore * 0.3, 0.0, 1.0));
         diffuseColor.rgb *= 1.0 - smoothstep(40.0, 120.0, vRad) * 0.25;`,
+      )
+      .replace(
+        "#include <normal_fragment_maps>",
+        `vec2 r1 = vNormalMapUv + vec2(uTime * 0.021, uTime * 0.013);
+        vec2 r2 = vNormalMapUv * 2.3 - vec2(uTime * 0.017, -uTime * 0.026);
+        vec3 n1 = texture2D(normalMap, r1).xyz * 2.0 - 1.0;
+        vec3 n2 = texture2D(normalMap, r2).xyz * 2.0 - 1.0;
+        vec3 mapN = normalize(vec3(n1.xy + n2.xy, n1.z * n2.z));
+        mapN.xy *= normalScale * (1.0 - smoothstep(30.0, 110.0, vRad) * 0.7);
+        normal = normalize(tbn * mapN);`,
       );
   };
   const sea = new THREE.Mesh(geo, mat);
@@ -190,8 +248,8 @@ export function makeSea(scene: THREE.Scene, island: THREE.Group): Sea {
   scene.add(foam);
   void island;
 
-  const dayC = new THREE.Color(0x2a8f9a);
-  const nightC = new THREE.Color(0x07243a);
+  const dayC = new THREE.Color(0x1b6a78);
+  const nightC = new THREE.Color(0x061a2c);
   return {
     update(t, night) {
       seaU.uTime.value = t;
@@ -207,19 +265,9 @@ export function makeSea(scene: THREE.Scene, island: THREE.Group): Sea {
 /* Island body: grass, cliffs, rocks, waterfalls, tunnel mouths                                    */
 /* ------------------------------------------------------------------ */
 export function makeIsland(kit: Kit, island: THREE.Group): void {
-  const grass = canvasTex(512, 512, (g, w, h) => {
-    g.fillStyle = "#6bb56a";
-    g.fillRect(0, 0, w, h);
-    const r = rng(5);
-    for (let i = 0; i < 1100; i++) {
-      g.fillStyle = r() < 0.5 ? "rgba(84,166,96,0.32)" : "rgba(128,204,112,0.28)";
-      g.beginPath();
-      g.arc(r() * w, r() * h, 5 + r() * 24, 0, Math.PI * 2);
-      g.fill();
-    }
-  });
   const soil = kit.mat(0x7a5a42, 1, 0, true);
-  const top = new THREE.MeshStandardMaterial({ map: grass, roughness: 0.95 });
+  const lawn = grassMaps(9);
+  const top = new THREE.MeshStandardMaterial({ ...lawn, roughness: 1, normalScale: new THREE.Vector2(0.8, 0.8) });
   kit.put(island, new THREE.CylinderGeometry(ISLE, ISLE, 0.5, 72), [soil, top, soil], 0, -0.25, 0, true);
 
   /* faceted cliffs, vertex-coloured from soil down to wet stone */
@@ -258,27 +306,33 @@ export function makeIsland(kit: Kit, island: THREE.Group): void {
   }
   cg.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   cg.computeVertexNormals();
-  const cliff = new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
+  const rock = rockMaps(1);
+  [rock.map, rock.normalMap, rock.roughnessMap].forEach((t) => t.repeat.set(14, 1.2));
+  const cliff = new THREE.Mesh(
+    cg,
+    new THREE.MeshStandardMaterial({ ...rock, vertexColors: true, roughness: 1, normalScale: new THREE.Vector2(1.6, 1.6) }),
+  );
   cliff.position.y = -1.97;
   cliff.castShadow = true;
   cliff.receiveShadow = true;
   island.add(cliff);
 
   /* boulders at the waterline */
-  const rockMat = kit.mat(0x8a7a6a, 1, 0, true);
+  const rockMat = new THREE.MeshStandardMaterial({ normalMap: rippleNormal(3), color: 0x8f8170, roughness: 0.95, normalScale: new THREE.Vector2(1.2, 1.2) });
   const rr = rng(8);
   for (let i = 0; i < 14; i++) {
     const a = rr() * Math.PI * 2;
     const rad = 10.1 + rr() * 2.6;
     const s = 0.35 + rr() * 0.9;
-    const m = kit.put(island, new THREE.DodecahedronGeometry(s, 0), rockMat, Math.cos(a) * rad, SEA_Y + s * 0.2, Math.sin(a) * rad);
-    m.rotation.set(rr() * 3, rr() * 3, rr() * 3);
+    const m = kit.put(island, boulder(i % 5), rockMat, Math.cos(a) * rad, SEA_Y + s * 0.2, Math.sin(a) * rad);
+    m.scale.setScalar(s);
+    m.rotation.set(rr() * 0.6, rr() * 3, rr() * 0.6);
   }
 
   /* rim shrubs */
-  const shrubGeo = new THREE.IcosahedronGeometry(1, 0);
-  const greens = [0x3faf6e, 0x58c985, 0x2f9a60].map((c) =>
-    windify(new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, flatShading: true }), "crown"),
+  const shrubGeo = leafBlob(5, 2);
+  const greens = [0x3f9a5a, 0x4fae63, 0x2f8a52].map((c) =>
+    windify(new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, vertexColors: true }), "crown"),
   );
   for (let i = 0; i < 72; i++) {
     const a = (i / 72) * Math.PI * 2;
@@ -357,8 +411,8 @@ export function makeIsland(kit: Kit, island: THREE.Group): void {
 /* Roads, crossings, lamps, trees and the people on the pavements                                  */
 /* ------------------------------------------------------------------ */
 export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, folks: Folks): void {
-  const asphalt = kit.mat(0x2b3640, 0.92);
-  const curb = kit.mat(0xd4c9b5, 0.9);
+  const asphalt = worldUV(new THREE.MeshStandardMaterial({ ...asphaltMaps(1), roughness: 1, normalScale: new THREE.Vector2(0.7, 0.7) }), 0.45);
+  const curb = worldUV(new THREE.MeshStandardMaterial({ ...pavingMaps(1), roughness: 1, normalScale: new THREE.Vector2(0.9, 0.9) }), 1.1);
   const paint = kit.mat(0xfff1d0, 0.7);
   const amber = kit.mat(0xffd36b, 0.7);
 
@@ -411,8 +465,8 @@ export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, fol
   /* trees: a ring around the rim and a few in the corners */
   const rr = rng(17);
   const trunk = kit.mat(0x8a5a3c, 0.9);
-  const leafA = [0x3faf6e, 0x58c985, 0x2f9a60].map((c) =>
-    windify(new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true }), "crown"),
+  const leafA = [0x3f9a5a, 0x5aae5e, 0x2f8a52].map((c) =>
+    windify(new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, vertexColors: true }), "crown"),
   );
   const tree = (x: number, z: number, s: number) => {
     const g = new THREE.Group();
@@ -423,13 +477,27 @@ export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, fol
     const pine = rr() < 0.5;
     const leaf = leafA[Math.floor(rr() * 3)];
     if (pine) {
-      kit.cone(g, 0.5, 0.9, leaf, 0, 0.4, 0, 7);
-      kit.cone(g, 0.38, 0.8, leaf, 0, 0.9, 0, 7);
-      kit.cone(g, 0.25, 0.6, leaf, 0, 1.35, 0, 7);
+      /* five ragged tiers, narrowing to the tip */
+      for (let k = 0; k < 5; k++) {
+        const w = 0.56 - k * 0.1;
+        const m = kit.put(g, pineTier(k + Math.floor(rr() * 4) * 5), leaf, 0, 0.62 + k * 0.3, 0);
+        m.scale.set(w, 0.55 - k * 0.04, w);
+        m.rotation.y = rr() * 6.28;
+      }
     } else {
-      kit.put(g, new THREE.IcosahedronGeometry(0.5, 0), leaf, 0, 0.95, 0);
-      kit.put(g, new THREE.IcosahedronGeometry(0.34, 0), leaf, 0.3, 0.7, 0.1);
-      kit.put(g, new THREE.IcosahedronGeometry(0.3, 0), leaf, -0.28, 0.75, -0.12);
+      /* a broad crown built from a few overlapping leaf masses */
+      const parts: [number, number, number, number][] = [
+        [0, 1.0, 0, 0.5],
+        [0.3, 0.8, 0.12, 0.36],
+        [-0.28, 0.82, -0.12, 0.34],
+        [0.05, 0.78, -0.3, 0.32],
+        [-0.08, 1.28, 0.06, 0.32],
+      ];
+      parts.forEach(([px, py, pz, r]) => {
+        const m = kit.put(g, leafBlob(Math.floor(rr() * 6), 3), leaf, px, py, pz);
+        m.scale.setScalar(r);
+        m.rotation.y = rr() * 6.28;
+      });
     }
   };
   for (let i = 0; i < 20; i++) {
@@ -681,10 +749,10 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
   const lh = new THREE.Group();
   lh.position.set(25, SEA_Y, -17);
   scene.add(lh);
-  const rock = kit.mat(0x8a7a6a, 1, 0, true);
-  kit.put(lh, new THREE.DodecahedronGeometry(2.2, 0), rock, 0, 0.3, 0);
-  kit.put(lh, new THREE.DodecahedronGeometry(1.2, 0), rock, 1.8, 0.1, 1.0);
-  kit.put(lh, new THREE.DodecahedronGeometry(1.0, 0), rock, -1.5, 0.2, -1.2);
+  const rock = new THREE.MeshStandardMaterial({ normalMap: rippleNormal(3), color: 0x8f8170, roughness: 0.95, normalScale: new THREE.Vector2(1.2, 1.2) });
+  kit.put(lh, boulder(1), rock, 0, 0.3, 0).scale.setScalar(2.2);
+  kit.put(lh, boulder(2), rock, 1.8, 0.1, 1.0).scale.setScalar(1.2);
+  kit.put(lh, boulder(3), rock, -1.5, 0.2, -1.2).scale.setScalar(1.0);
   for (let i = 0; i < 4; i++) {
     kit.cyl(lh, 0.55 - i * 0.05, 0.62 - i * 0.05, 0.9, i % 2 ? 0xfff4e3 : 0xf25c54, 0, 1.9 + i * 0.9, 0, 14);
   }
@@ -712,25 +780,54 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
     sweep.add(holder);
   });
 
-  /* clouds that catch the sunset */
-  const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true, emissive: 0x6b3a3a, emissiveIntensity: 0.35 });
+  /* soft clouds: billboards of layered puffs that catch the sunset on their lit side */
+  const puff = canvasTex(256, 256, (g, w, h) => {
+    const r = rng(77);
+    g.clearRect(0, 0, w, h);
+    for (let i = 0; i < 26; i++) {
+      const x = w * (0.22 + r() * 0.56);
+      const y = h * (0.38 + r() * 0.3);
+      const rad = w * (0.1 + r() * 0.16);
+      const gr = g.createRadialGradient(x, y - rad * 0.3, 0, x, y, rad);
+      gr.addColorStop(0, "rgba(255,255,255,0.55)");
+      gr.addColorStop(0.6, "rgba(250,246,244,0.25)");
+      gr.addColorStop(1, "rgba(240,236,240,0)");
+      g.fillStyle = gr;
+      g.beginPath();
+      g.arc(x, y, rad, 0, Math.PI * 2);
+      g.fill();
+    }
+    /* shade the underside */
+    g.globalCompositeOperation = "source-atop";
+    const under = g.createLinearGradient(0, h * 0.35, 0, h * 0.85);
+    under.addColorStop(0, "rgba(255,236,220,0)");
+    under.addColorStop(1, "rgba(150,120,140,0.55)");
+    g.fillStyle = under;
+    g.fillRect(0, 0, w, h);
+  });
+  const cloudMats: THREE.SpriteMaterial[] = [];
   const clouds: { g: THREE.Group; a: number; r: number; sp: number }[] = [];
-  for (let c = 0; c < 9; c++) {
+  for (let c = 0; c < 12; c++) {
     const g = new THREE.Group();
     const n = 3 + (c % 3);
     for (let k = 0; k < n; k++) {
-      const sp = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9 + (k % 2) * 0.35, 1), cloudMat);
-      sp.position.set(k * 1.1 - n * 0.55, (k % 2) * 0.3, (k % 3) * 0.25);
-      sp.scale.y = 0.55;
+      const m = new THREE.SpriteMaterial({ map: puff, transparent: true, depthWrite: false, opacity: 0.9, color: 0xffe2cc, fog: true });
+      cloudMats.push(m);
+      const sp = new THREE.Sprite(m);
+      sp.position.set(k * 3.2 - n * 1.6 + R() * 1.5, R() * 1.2, R() * 2);
+      sp.scale.set(7 + R() * 4, 4 + R() * 2, 1);
+      sp.material.rotation = (R() - 0.5) * 0.2;
       g.add(sp);
     }
-    const a = (c / 9) * Math.PI * 2;
-    const r = 26 + (c % 3) * 9;
-    g.position.set(Math.cos(a) * r, 10 + (c % 4) * 1.6, Math.sin(a) * r);
-    g.scale.setScalar(1.3 + (c % 3) * 0.5);
+    const a = (c / 12) * Math.PI * 2;
+    const r = 34 + (c % 3) * 12;
+    g.position.set(Math.cos(a) * r, 12 + (c % 4) * 2.4, Math.sin(a) * r);
+    g.scale.setScalar(1 + (c % 3) * 0.35);
     scene.add(g);
     clouds.push({ g, a, r, sp: 0.006 + (c % 3) * 0.003 });
   }
+  const cloudDay = new THREE.Color(0xffe2cc);
+  const cloudNight = new THREE.Color(0x3a4670);
 
   /* drifting lanterns and fireflies */
   const nL = 110;
@@ -792,6 +889,10 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
     beamMat.opacity = kit.night * 0.07;
     lamp.scale.setScalar(1 + Math.sin(t * 5) * 0.04);
 
+    cloudMats.forEach((m) => {
+      m.color.lerpColors(cloudDay, cloudNight, kit.night);
+      m.opacity = 0.9 - kit.night * 0.45;
+    });
     clouds.forEach((c) => {
       c.a += c.sp * dt;
       c.g.position.x = Math.cos(c.a) * c.r;

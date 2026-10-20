@@ -193,3 +193,89 @@ export function makeMeadow(
     }
   });
 }
+
+const blobCache = new Map<string, THREE.BufferGeometry>();
+
+/**
+ * A lumpy, smooth leaf mass: a subdivided sphere pushed in and out by noise, darker underneath
+ * and lighter on top through vertex colours, so crowns read as foliage instead of facets.
+ */
+export function leafBlob(seed: number, detail = 3): THREE.BufferGeometry {
+  const key = `${seed}|${detail}`;
+  const hit = blobCache.get(key);
+  if (hit) return hit;
+  const g = new THREE.IcosahedronGeometry(1, detail);
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const R = rng(seed);
+  const lobes = Array.from({ length: 7 }, () => new THREE.Vector3(R() - 0.5, R() * 0.8 - 0.2, R() - 0.5).normalize());
+  const colors = new Float32Array(pos.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    let bump = 0;
+    for (const l of lobes) bump += Math.max(0, v.dot(l)) ** 4 * 0.22;
+    const n = Math.sin(v.x * 9.1 + seed) * Math.sin(v.y * 8.3 + seed * 0.5) * Math.sin(v.z * 7.7) * 0.07;
+    const r = 1 + bump + n - (v.y < -0.3 ? (-0.3 - v.y) * 0.5 : 0);
+    pos.setXYZ(i, v.x * r, v.y * r * 0.9, v.z * r);
+    const shade = 0.62 + (v.y * 0.5 + 0.5) * 0.45 + n * 1.2;
+    colors[i * 3] = shade;
+    colors[i * 3 + 1] = shade;
+    colors[i * 3 + 2] = shade;
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  g.computeVertexNormals();
+  blobCache.set(key, g);
+  return g;
+}
+
+/** A pine tier: a cone with a ragged, drooping rim. */
+export function pineTier(seed: number): THREE.BufferGeometry {
+  const key = `pine|${seed}`;
+  const hit = blobCache.get(key);
+  if (hit) return hit;
+  const g = new THREE.ConeGeometry(1, 1, 16, 3);
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const R = rng(seed);
+  const jag = Array.from({ length: 17 }, () => 0.8 + R() * 0.35);
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const a = Math.atan2(z, x);
+    const k = Math.round(((a + Math.PI) / (Math.PI * 2)) * 16);
+    const t = 0.5 - y;
+    const f = 1 + (jag[k] - 1) * t;
+    pos.setXYZ(i, x * f, y - (t > 0.95 ? (jag[k] - 0.8) * 0.25 : 0), z * f);
+    const shade = 0.6 + (1 - t) * 0.5;
+    colors[i * 3] = shade;
+    colors[i * 3 + 1] = shade;
+    colors[i * 3 + 2] = shade;
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  g.computeVertexNormals();
+  blobCache.set(key, g);
+  return g;
+}
+
+/** A weathered boulder: a noisy sphere instead of a sharp polyhedron. */
+export function boulder(seed: number): THREE.BufferGeometry {
+  const key = `rock|${seed}`;
+  const hit = blobCache.get(key);
+  if (hit) return hit;
+  const g = new THREE.IcosahedronGeometry(1, 2);
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    const n =
+      Math.sin(v.x * 4.3 + seed) * Math.cos(v.y * 3.7 + seed * 1.3) * 0.18 +
+      Math.sin(v.z * 7.9 + seed * 2.1) * 0.06 +
+      (v.y < 0 ? v.y * 0.25 : 0);
+    v.multiplyScalar(1 + n);
+    pos.setXYZ(i, v.x * 1.1, v.y * 0.75, v.z);
+  }
+  g.computeVertexNormals();
+  blobCache.set(key, g);
+  return g;
+}

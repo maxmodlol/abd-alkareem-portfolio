@@ -685,6 +685,14 @@ export function CityApp() {
         >
           <h2>Products are cities. I build the plumbing.</h2>
           <p>Swipe to visit each building, or tap one on the island. Drag to look around.</p>
+          <div className="row">
+            <button className="pill" type="button" onClick={playing ? stopPlay : startPlay}>
+              {playing ? "Exit game" : "Play the city"}
+            </button>
+            <button className="pill alt" type="button" onClick={touring ? stopTour : startTour}>
+              {touring ? "Stop tour" : "Guided tour"}
+            </button>
+          </div>
         </div>
         {projects.map((p, i) => (
           <div

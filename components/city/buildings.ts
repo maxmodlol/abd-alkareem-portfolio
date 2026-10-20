@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import { canvasTex, FONT, roundRectPath, type Kit } from "./kit";
+import { leafBlob } from "./nature";
 import type { Folks } from "./people";
 
 export type Gate = { open: boolean };
@@ -456,9 +457,9 @@ export function buildOliva(kit: Kit, folks: Folks, island: THREE.Group): THREE.G
   ([-1, 1] as const).forEach((sx) => {
     kit.box(g, 0.36, 0.28, 0.36, terra, sx * 2.02, ty, -0.1);
     kit.cyl(g, 0.03, 0.045, 0.5, 0x6b5a46, sx * 2.02, ty + 0.28, -0.1, 6);
-    const olive = kit.mat(0x8a9a6a, 0.9, 0, true);
-    kit.put(g, new THREE.IcosahedronGeometry(0.3, 0), olive, sx * 2.02, ty + 0.95, -0.1);
-    kit.put(g, new THREE.IcosahedronGeometry(0.2, 0), olive, sx * 2.02 + 0.18, ty + 0.78, 0.05);
+    const olive = kit.mat(0x8a9a6a, 0.9);
+    kit.put(g, leafBlob(3, 2), olive, sx * 2.02, ty + 0.95, -0.1).scale.setScalar(0.3);
+    kit.put(g, leafBlob(4, 2), olive, sx * 2.02 + 0.18, ty + 0.78, 0.05).scale.setScalar(0.2);
   });
   kit.hit(g, 4.4, 3.3, 4.8, 1.6, 0.3);
 
@@ -626,10 +627,10 @@ export function buildCarebooks(kit: Kit, folks: Folks, island: THREE.Group, labe
   kit.box(g, 0.7, 0.2, 0.03, 0x8a5a3c, -0.5, 0.2, 0.11, true);
   kit.box(g, 0.05, 0.17, 0.2, 0x4a2f1f, -0.8, 0, 0.2, false);
   kit.box(g, 0.05, 0.17, 0.2, 0x4a2f1f, -0.2, 0, 0.2, false);
-  const leaf = kit.mat(0x58c985, 0.85, 0, true);
+  const leaf = kit.mat(0x4fae63, 0.85);
   ([-1, 1] as const).forEach((sx) => {
     kit.cyl(g, 0.05, 0.07, 0.4, 0x8a5a3c, sx * 1.1, 0, 1.0, 6);
-    kit.put(g, new THREE.IcosahedronGeometry(0.34, 0), leaf, sx * 1.1, 0.75, 1.0);
+    kit.put(g, leafBlob(sx > 0 ? 1 : 2, 2), leaf, sx * 1.1, 0.75, 1.0).scale.setScalar(0.34);
   });
   kit.lamp(g, -1.0, 0.7, 1.0);
   kit.pointLight(g, 0xffd9a0, 0.3, 1.4, 3, 0, 1.0, 0.7);

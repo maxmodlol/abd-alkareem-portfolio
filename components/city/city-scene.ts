@@ -9,7 +9,7 @@ import { Particles } from "./particles";
 import { Folks } from "./people";
 import { Sfx } from "./sfx";
 import { Traffic } from "./traffic";
-import { createSkyMaterial, makeArcs, makeIsland, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
+import { createPhysicalSky, makeArcs, makeIsland, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
 
 export type { BuildingId };
 export type FocusKey = BuildingId | "home";
@@ -163,7 +163,8 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffc58a, 3.6);
   sun.castShadow = !startNarrow;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.radius = 3;
   sun.shadow.camera.left = -15;
   sun.shadow.camera.right = 15;
   sun.shadow.camera.top = 15;
@@ -180,11 +181,14 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   /* soft reflections from the sky, used by glass and water */
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
-  const envMesh = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), createSkyMaterial());
+  const envSky = createPhysicalSky();
+  envSky.mesh.scale.setScalar(40);
+  envSky.set(new THREE.Vector3(-0.62, 0.34, 0.7).normalize(), 1);
+  const envMesh = envSky.mesh;
   envScene.add(envMesh);
   const envRT = pmrem.fromScene(envScene, 0.02);
   scene.environment = envRT.texture;
-  scene.environmentIntensity = 0.55;
+  scene.environmentIntensity = 0.7;
 
   /* the world */
   const kit = new Kit();
@@ -823,7 +827,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     hemi.groundColor.lerpColors(hGroundDay, hGroundNight, n);
     hemi.intensity = lerp(1.25, 0.7, n);
     fill.intensity = lerp(0.5, 0.25, n);
-    scene.environmentIntensity = lerp(0.55, 0.3, n);
+    scene.environmentIntensity = lerp(0.7, 0.25, n);
     sky.update(n, sunDir, camera.position);
     (scene.fog as THREE.FogExp2).color.copy(sky.fog);
     (scene.fog as THREE.FogExp2).density = 0.0075 + n * 0.003;
@@ -943,7 +947,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
         const air = Math.max(0, explorer.py);
         goal.yaw = goal.yaw + angDiff(goal.yaw, playYaw);
         goal.pitch = playPitch + Math.min(0.35, air * 0.05);
-        goal.dist = (narrow ? 8.4 : 6.6) + sp * 0.32 + Math.min(5, air * 0.7);
+        goal.dist = (narrow ? 6.9 : 6.6) + sp * 0.32 + Math.min(5, air * 0.7);
         goal.fov = (narrow ? 58 : 46) + Math.min(8, sp * 1.4);
       } else {
         const dwell = explorer.dwelling;

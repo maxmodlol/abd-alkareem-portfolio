@@ -509,6 +509,9 @@ h2 {
     font-weight: 600;
     color: var(--coral);
   }
+  .card .row {
+    margin-top: 16px;
+  }
   .card p {
     margin-top: 8px;
     font-size: 15px;
