@@ -15,7 +15,7 @@ export type Fx = {
   dispose: () => void;
 };
 
-/** Film look: bloom, tilt-shift softness at the top and bottom, warm highlights, vignette and grain. */
+/** Film look: bloom, tilt-shift softness at the top and bottom, a touch of warmth, vignette and grain. */
 const GRADE = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
@@ -56,10 +56,10 @@ const GRADE = {
       col.r = mix(col.r, texture2D(tDiffuse, vUv + c * ab * 6.0).r, 1.0 - band);
       col.b = mix(col.b, texture2D(tDiffuse, vUv - c * ab * 6.0).b, 1.0 - band);
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(col, col * vec3(1.07, 1.0, 0.92), smoothstep(0.45, 1.0, l));
+      col = mix(col, col * vec3(1.02, 1.0, 0.98), smoothstep(0.45, 1.0, l));
       col = mix(col, col * vec3(0.9, 1.0, 1.1), 1.0 - smoothstep(0.0, 0.45, l));
-      col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 1.08);
-      col = (col - 0.5) * 1.03 + 0.5;
+      col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 1.14);
+      col = (col - 0.5) * 1.06 + 0.5;
       float d = length(c * vec2(1.0, 0.92));
       col *= mix(1.0, smoothstep(0.88, 0.25, d), uVig);
       col += (hash(vUv * uRes + fract(uTime) * 91.0) - 0.5) * uGrain;
@@ -122,8 +122,9 @@ export function createFx(
         grade.uniforms.uTilt.value = on ? 0 : o.tilt * 0.15;
       },
       setNight(n) {
-        bloom.strength = 0.25 + n * 0.3;
-        bloom.threshold = 0.92 - n * 0.06;
+        /* daylight is bright everywhere, so only real lights bloom; at night the windows and lamps do */
+        bloom.strength = 0.14 + n * 0.41;
+        bloom.threshold = 1.6 - n * 0.74;
       },
       dispose() {
         renderPass.dispose();

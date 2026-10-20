@@ -279,3 +279,95 @@ export function boulder(seed: number): THREE.BufferGeometry {
   blobCache.set(key, g);
   return g;
 }
+
+/** Paints every vertex of a geometry one colour and drops its UVs, so parts can be merged into one mesh. */
+function tinted(g: THREE.BufferGeometry, color: THREE.Color, shade: (x: number, y: number, z: number) => number = () => 1): THREE.BufferGeometry {
+  const out = g.index ? g.toNonIndexed() : g;
+  out.deleteAttribute("uv");
+  const pos = out.attributes.position as THREE.BufferAttribute;
+  const c = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const s = shade(pos.getX(i), pos.getY(i), pos.getZ(i));
+    c[i * 3] = color.r * s;
+    c[i * 3 + 1] = color.g * s;
+    c[i * 3 + 2] = color.b * s;
+  }
+  out.setAttribute("color", new THREE.BufferAttribute(c, 3));
+  return out;
+}
+
+/**
+ * A palm in one merged geometry with vertex colours: a curved, ringed trunk, eight arching fronds
+ * folded along their spine, and a few coconuts. About 2.1 units tall, ready for instancing.
+ */
+export function palmGeo(seed: number): THREE.BufferGeometry {
+  const key = `palm|${seed}`;
+  const hit = blobCache.get(key);
+  if (hit) return hit;
+  const R = rng(seed);
+  const parts: THREE.BufferGeometry[] = [];
+  const bark = new THREE.Color(0x9a7450);
+  const bend = 0.25 + R() * 0.25;
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 7; i++) {
+    const t = i / 7;
+    pts.push(new THREE.Vector3(bend * t * t, 1.9 * t, 0));
+  }
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < 7; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const len = a.distanceTo(b);
+    const seg = new THREE.CylinderGeometry(0.06 - i * 0.004, 0.075 - i * 0.004, len * 1.06, 7, 1);
+    seg.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, b.clone().sub(a).normalize()));
+    seg.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+    parts.push(tinted(seg, bark, (_x, y) => (i % 2 ? 0.82 : 1) * (0.85 + (y - a.y) * 0.4)));
+  }
+  const top = pts[7];
+  const leaf = new THREE.Color(0x58b043);
+  const n = 8;
+  for (let k = 0; k < n; k++) {
+    const L = 0.95 + R() * 0.3;
+    const f = new THREE.PlaneGeometry(L, 0.36, 6, 2);
+    const p = f.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const s = p.getX(i) + L / 2;
+      const u = s / L;
+      const w = p.getY(i) * Math.sin(Math.PI * Math.min(1, u * 0.95 + 0.08));
+      const droop = 0.28 * s - (0.55 + R() * 0.02) * s * s;
+      p.setXYZ(i, s, droop - Math.abs(w) * 0.55, w);
+    }
+    f.computeVertexNormals();
+    f.rotateZ(0.1 + R() * 0.25);
+    f.rotateY((k / n) * Math.PI * 2 + R() * 0.4);
+    f.translate(top.x, top.y, top.z);
+    const g = tinted(f, leaf, (x, y, z) => {
+      const d = Math.hypot(x - top.x, z - top.z);
+      return 1.05 - d * 0.35 + (y - top.y) * 0.3;
+    });
+    /* both faces, so the fronds read from below as well */
+    const back = g.clone();
+    const bn = back.attributes.normal as THREE.BufferAttribute;
+    for (let i = 0; i < bn.count; i++) bn.setXYZ(i, -bn.getX(i), -bn.getY(i), -bn.getZ(i));
+    const bp = back.attributes.position as THREE.BufferAttribute;
+    const bc = back.attributes.color as THREE.BufferAttribute;
+    for (let i = 0; i < bp.count; i += 3) {
+      for (const attr of [bp, bn, bc]) {
+        const x = attr.getX(i + 1), y = attr.getY(i + 1), z = attr.getZ(i + 1);
+        attr.setXYZ(i + 1, attr.getX(i + 2), attr.getY(i + 2), attr.getZ(i + 2));
+        attr.setXYZ(i + 2, x, y, z);
+      }
+    }
+    parts.push(g, back);
+  }
+  const nut = new THREE.Color(0x6b4a2a);
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2;
+    const c = new THREE.IcosahedronGeometry(0.06, 0);
+    c.translate(top.x + Math.cos(a) * 0.07, top.y - 0.06, top.z + Math.sin(a) * 0.07);
+    parts.push(tinted(c, nut));
+  }
+  const g = mergeGeometries(parts);
+  blobCache.set(key, g);
+  return g;
+}

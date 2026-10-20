@@ -7,37 +7,52 @@ import { rng } from "./kit";
  * No image files are downloaded; everything comes from a seeded noise field.
  */
 
+/** Phones get half-size maps: a quarter of the start-up work, and the difference is not visible there. */
+let detail = 1;
+export function setTextureDetail(small: boolean): void {
+  detail = small ? 0.5 : 1;
+}
+const px = (size: number) => Math.max(64, Math.round(size * detail));
+
 /** Tileable value noise with a few octaves, on a size x size grid, values 0..1. */
 function fbm(size: number, seed: number, cells: number, octaves = 4, gain = 0.5): Float32Array {
   const out = new Float32Array(size * size);
   const R = rng(seed);
   let amp = 1;
   let total = 0;
-  let c = cells;
+  let c = Math.max(1, Math.round(cells * detail));
+  /* the lattice cell and smoothed fraction of every column, computed once per octave */
+  const i0 = new Int32Array(size);
+  const i1 = new Int32Array(size);
+  const fr = new Float32Array(size);
   for (let o = 0; o < octaves; o++) {
     const lat = new Float32Array(c * c);
     for (let i = 0; i < lat.length; i++) lat[i] = R();
     const step = size / c;
+    for (let x = 0; x < size; x++) {
+      const g = x / step;
+      const f = g - Math.floor(g);
+      i0[x] = Math.floor(g) % c;
+      i1[x] = (i0[x] + 1) % c;
+      fr[x] = f * f * (3 - 2 * f);
+    }
     for (let y = 0; y < size; y++) {
-      const gy = y / step;
-      const y0 = Math.floor(gy) % c;
-      const y1 = (y0 + 1) % c;
-      let fy = gy - Math.floor(gy);
-      fy = fy * fy * (3 - 2 * fy);
+      const r0 = i0[y] * c;
+      const r1 = i1[y] * c;
+      const fy = fr[y];
+      const row = y * size;
       for (let x = 0; x < size; x++) {
-        const gx = x / step;
-        const x0 = Math.floor(gx) % c;
-        const x1 = (x0 + 1) % c;
-        let fx = gx - Math.floor(gx);
-        fx = fx * fx * (3 - 2 * fx);
-        const a = lat[y0 * c + x0] + (lat[y0 * c + x1] - lat[y0 * c + x0]) * fx;
-        const b = lat[y1 * c + x0] + (lat[y1 * c + x1] - lat[y1 * c + x0]) * fx;
-        out[y * size + x] += (a + (b - a) * fy) * amp;
+        const fx = fr[x];
+        const a0 = lat[r0 + i0[x]];
+        const b0 = lat[r1 + i0[x]];
+        const a = a0 + (lat[r0 + i1[x]] - a0) * fx;
+        const b = b0 + (lat[r1 + i1[x]] - b0) * fx;
+        out[row + x] += (a + (b - a) * fy) * amp;
       }
     }
     total += amp;
     amp *= gain;
-    c *= 2;
+    c = Math.min(c * 2, size);
   }
   for (let i = 0; i < out.length; i++) out[i] /= total;
   return out;
@@ -96,7 +111,7 @@ const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** Lawn: clumps of lighter and darker grass, dry patches and fine blade grain. */
 export function grassMaps(repeat: number): SurfaceMaps {
-  const S = 512;
+  const S = px(512);
   const big = fbm(S, 11, 4, 4);
   const fine = fbm(S, 12, 64, 3, 0.6);
   const dry = fbm(S, 13, 6, 3);
@@ -130,7 +145,7 @@ export function grassMaps(repeat: number): SurfaceMaps {
 
 /** Asphalt: dark grain, lighter worn tracks and patched repairs. */
 export function asphaltMaps(repeat: number): SurfaceMaps {
-  const S = 512;
+  const S = px(512);
   const grain = fbm(S, 21, 128, 2, 0.7);
   const wear = fbm(S, 22, 5, 3);
   const patch = fbm(S, 23, 8, 2);
@@ -165,7 +180,7 @@ export function asphaltMaps(repeat: number): SurfaceMaps {
 
 /** Paving slabs with grout lines and a little dirt. */
 export function pavingMaps(repeat: number): SurfaceMaps {
-  const S = 256;
+  const S = px(256);
   const n = fbm(S, 31, 32, 3);
   const dirt = fbm(S, 32, 4, 3);
   const tiles = 4;
@@ -204,53 +219,14 @@ export function pavingMaps(repeat: number): SurfaceMaps {
   };
 }
 
-/** Rock and soil for the cliffs: strata bands broken up by noise. */
-export function rockMaps(repeat: number): SurfaceMaps {
-  const S = 512;
-  const n = fbm(S, 41, 8, 5, 0.55);
-  const fine = fbm(S, 42, 64, 2);
-  const h = new Float32Array(S * S);
-  for (let i = 0; i < h.length; i++) {
-    const y = (i / S) | 0;
-    h[i] = 0.5 + 0.5 * Math.sin(y * 0.09 + n[i] * 7) * 0.6 + n[i] * 0.4 + fine[i] * 0.2;
-  }
-  const map = toTexture(
-    S,
-    (i, px) => {
-      const v = 0.7 + h[i] * 0.35;
-      px[0] = 170 * v;
-      px[1] = 140 * v;
-      px[2] = 112 * v;
-      px[3] = 255;
-    },
-    true,
-    repeat,
-  );
-  return {
-    map,
-    normalMap: normalFrom(h, S, 5, repeat),
-    roughnessMap: toTexture(S, (_i, px) => {
-      px[0] = px[1] = px[2] = 235;
-      px[3] = 255;
-    }, false, repeat),
-  };
-}
-
 /** Small ripples for the sea, scrolled in two directions by the water shader. */
 export function rippleNormal(repeat: number): THREE.Texture {
-  const S = 256;
+  const S = px(256);
   const a = fbm(S, 51, 8, 4, 0.55);
   const b = fbm(S, 52, 16, 3, 0.5);
   const h = new Float32Array(S * S);
   for (let i = 0; i < h.length; i++) h[i] = a[i] * 0.7 + b[i] * 0.3;
   return normalFrom(h, S, 10, repeat);
-}
-
-/** Plaster grain for walls, used as a subtle bump on every facade. */
-export function plasterNormal(): THREE.Texture {
-  const S = 128;
-  const n = fbm(S, 61, 32, 3, 0.6);
-  return normalFrom(n, S, 2, 1);
 }
 
 /** Maps a material's textures by world x and z instead of the mesh's own UVs, so long boxes tile evenly. */

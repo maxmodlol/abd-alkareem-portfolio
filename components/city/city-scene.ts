@@ -9,7 +9,9 @@ import { Particles } from "./particles";
 import { Folks } from "./people";
 import { Sfx } from "./sfx";
 import { Traffic } from "./traffic";
-import { createPhysicalSky, makeArcs, makeIsland, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
+import { createPhysicalSky, makeArcs, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
+import { makeCoast, makeDowntown, makeIslets, Palms } from "./coast";
+import { setTextureDetail } from "./textures";
 
 export type { BuildingId };
 export type FocusKey = BuildingId | "home";
@@ -43,7 +45,7 @@ export type CityScene = {
   focus: (key: FocusKey) => void;
   select: (id: BuildingId | null) => void;
   relayout: () => void;
-  /** 0 is golden hour, 1 is deep night. */
+  /** 0 is clear noon, 1 is deep night. */
   setNight: (n: number) => void;
   /** Shifts the island sideways on desktop while the detail card is open. */
   setPanelOpen: (open: boolean) => void;
@@ -88,7 +90,8 @@ const BUILDING_POS: Record<BuildingId, [number, number]> = {
   arvo: [9.0, -2.6],
 };
 
-const DUSK = 0.22;
+/** Daytime is clear tropical noon; 1 is night. */
+export const DAY = 0;
 
 /* coins on the roofs, reached with the bounce pads and a glide */
 const ROOF_COINS: [number, number][] = [
@@ -156,19 +159,19 @@ export function createCityScene(opts: CityOptions): CityScene | null {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 900);
-  scene.fog = new THREE.FogExp2(0xffb36b, 0.0075);
+  scene.fog = new THREE.FogExp2(0xcfeaf8, 0.006);
 
-  /* light rig: a low sun that turns into moonlight, plus a cool fill */
-  const hemi = new THREE.HemisphereLight(0xffd2a8, 0x3b6a6f, 1.5);
+  /* light rig: a bright tropical sun that turns into moonlight, plus a cool fill */
+  const hemi = new THREE.HemisphereLight(0xd6ecff, 0x6f8f5a, 1.5);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffc58a, 3.6);
   sun.castShadow = !startNarrow;
   sun.shadow.mapSize.set(4096, 4096);
   sun.shadow.radius = 3;
-  sun.shadow.camera.left = -15;
-  sun.shadow.camera.right = 15;
-  sun.shadow.camera.top = 15;
-  sun.shadow.camera.bottom = -15;
+  sun.shadow.camera.left = -19;
+  sun.shadow.camera.right = 19;
+  sun.shadow.camera.top = 19;
+  sun.shadow.camera.bottom = -19;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 80;
   sun.shadow.bias = -0.0004;
@@ -183,7 +186,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   const envScene = new THREE.Scene();
   const envSky = createPhysicalSky();
   envSky.mesh.scale.setScalar(40);
-  envSky.set(new THREE.Vector3(-0.62, 0.34, 0.7).normalize(), 1);
+  envSky.set(new THREE.Vector3(-0.5, 0.72, 0.48).normalize(), 1);
   const envMesh = envSky.mesh;
   envScene.add(envMesh);
   const envRT = pmrem.fromScene(envScene, 0.02);
@@ -191,6 +194,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   scene.environmentIntensity = 0.7;
 
   /* the world */
+  setTextureDetail(startNarrow);
   const kit = new Kit();
   kit.lightsOn = !startNarrow;
   const folks = new Folks(kit);
@@ -198,8 +202,11 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   const sky = makeSky(scene);
   const island = new THREE.Group();
   scene.add(island);
-  const sea = makeSea(scene, island);
-  makeIsland(kit, island);
+  const sea = makeSea(scene);
+  const palms = new Palms();
+  makeCoast(kit, island, palms);
+  makeIslets(kit, scene, palms);
+  makeDowntown(kit, island, palms);
   buildVillageWellth(kit, folks, island);
   buildSahefa(kit, folks, island);
   buildDiwan(kit, folks, island);
@@ -209,7 +216,8 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   buildArvo(kit, folks, island, "Arvo");
   traffic.zones.push({ axis: "x", dir: -1, stop: -7.55, red: () => !watan.gate.open });
   traffic.zones.push({ axis: "x", dir: 1, stop: -8.85, red: () => !watan.gate.open });
-  makeStreets(kit, island, traffic, folks);
+  makeStreets(kit, island, traffic, folks, palms);
+  palms.build(island, !startNarrow);
   makeArcs(kit, island, {
     villagewellth: new THREE.Vector3(-4.6, 9.3, -4.6),
     sahefa: new THREE.Vector3(4.6, 3.4, -4.6),
@@ -468,7 +476,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     return { t: [x, y, z], d, yaw: Math.atan2(-x, -z), pitch, w, hh };
   };
   const focusSpecs: Record<FocusKey, FocusSpec> = {
-    home: { t: [0, 1.6, 0], d: 36, yaw: 0.75, pitch: 0.55, w: 12.5, hh: 9 },
+    home: { t: [-1.4, 2.2, -1.4], d: 50, yaw: 0.75, pitch: 0.6, w: 15, hh: 11 },
     villagewellth: spec("villagewellth", 4.0, 25, 4.8, 5.2, 0.3),
     sahefa: spec("sahefa", 1.3, 17.5, 5.4, 3.0, 0.4),
     diwan: spec("diwan", 1.1, 16.5, 5.0, 2.7, 0.38),
@@ -490,7 +498,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   let panelOpen = false;
   let offX = 0;
   let offGoal = 0;
-  let nightGoal = DUSK;
+  let nightGoal = DAY;
   let walking = false;
   let playing = false;
   let paused = false;
@@ -798,14 +806,14 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   /* ---------- loop ---------- */
   const k = reduceMotion ? 1 : 0.06;
   const v = new THREE.Vector3();
-  const sunDay = new THREE.Vector3(-0.62, 0.34, 0.7).normalize();
+  const sunDay = new THREE.Vector3(-0.5, 0.72, 0.48).normalize();
   const sunNight = new THREE.Vector3(-0.45, 0.75, 0.5).normalize();
   const sunDir = new THREE.Vector3();
-  const cSunDay = new THREE.Color(0xffc58a);
+  const cSunDay = new THREE.Color(0xfff0d8);
   const cSunNight = new THREE.Color(0x9bb8ff);
-  const hSkyDay = new THREE.Color(0xffd2a8);
+  const hSkyDay = new THREE.Color(0xd6ecff);
   const hSkyNight = new THREE.Color(0x5a6fb8);
-  const hGroundDay = new THREE.Color(0x3b6a6f);
+  const hGroundDay = new THREE.Color(0x6f8f5a);
   const hGroundNight = new THREE.Color(0x0b1b2a);
   let raf = 0;
   let last = performance.now();
@@ -822,15 +830,15 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     sunDir.lerpVectors(sunDay, sunNight, n).normalize();
     sun.position.copy(sunDir).multiplyScalar(34);
     sun.color.lerpColors(cSunDay, cSunNight, n);
-    sun.intensity = lerp(2.7, 0.9, n);
+    sun.intensity = lerp(2.3, 0.9, n);
     hemi.color.lerpColors(hSkyDay, hSkyNight, n);
     hemi.groundColor.lerpColors(hGroundDay, hGroundNight, n);
-    hemi.intensity = lerp(1.25, 0.7, n);
+    hemi.intensity = lerp(1.05, 0.7, n);
     fill.intensity = lerp(0.5, 0.25, n);
     scene.environmentIntensity = lerp(0.7, 0.25, n);
     sky.update(n, sunDir, camera.position);
     (scene.fog as THREE.FogExp2).color.copy(sky.fog);
-    (scene.fog as THREE.FogExp2).density = 0.0075 + n * 0.003;
+    (scene.fog as THREE.FogExp2).density = 0.006 + n * 0.0045;
     fx?.setNight(n);
     sea.update(t, n);
 
@@ -994,7 +1002,6 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       camera.updateProjectionMatrix();
     }
 
-    island.position.y = Math.sin(t * 0.8) * 0.05;
     ids.forEach((id) => {
       const target = id === selected ? 1.05 : id === hoverId ? 1.03 : 1;
       const g = byId[id];

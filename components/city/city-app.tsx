@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { jobs, person, skills } from "@/lib/content";
 import { projects, type Project } from "@/lib/projects";
 
-import { createCityScene, type BuildingId, type CityScene } from "./city-scene";
+import type { BuildingId, CityScene } from "./city-scene";
 
 function Stick({ onMove }: { onMove: (x: number, y: number) => void }) {
   const knob = useRef<HTMLDivElement>(null);
@@ -78,6 +78,8 @@ export function CityApp() {
   const [selected, setSelected] = useState<BuildingId | null>(null);
   const [copied, setCopied] = useState(false);
   const [glOk, setGlOk] = useState(true);
+  /* bumps once the 3D scene has loaded, so settings chosen before then are applied to it */
+  const [sceneReady, setSceneReady] = useState(0);
   const [night, setNight] = useState(false);
   const [touring, setTouring] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -196,7 +198,7 @@ export function CityApp() {
   }, []);
   useEffect(() => {
     sceneRef.current?.setMuted(muted);
-  }, [muted]);
+  }, [muted, sceneReady]);
   /* Esc leaves a building or closes a panel; in the game it drops you back on the street */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -212,16 +214,16 @@ export function CityApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, [view, touring, goHome, stopTour]);
   useEffect(() => {
-    sceneRef.current?.setNight(night ? 1 : 0.22);
-  }, [night]);
+    sceneRef.current?.setNight(night ? 1 : 0);
+  }, [night, sceneReady]);
   useEffect(() => {
     sceneRef.current?.setPanelOpen(view !== "home");
     sceneRef.current?.setPaused(playing && view !== "home");
     sceneRef.current?.setMinimap(playing && view === "home" ? miniRef.current : null);
-  }, [view, playing]);
+  }, [view, playing, sceneReady]);
   useEffect(() => {
     sceneRef.current?.setVisited(visited);
-  }, [visited]);
+  }, [visited, sceneReady]);
   useEffect(() => {
     if (!playing || !selected) return;
     setVisited((v) => (v.includes(selected) ? v : [...v, selected]));
@@ -241,39 +243,57 @@ export function CityApp() {
     }, 700);
   }, []);
 
-  /* Create and tear down the 3D scene. */
+  /* Create and tear down the 3D scene. three.js loads as its own chunk after the page is up,
+     so the text and controls paint first and the island fades in when it is ready. */
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const scene = createCityScene({
-      canvas,
-      tagEls: tagRefs.current,
-      getMetrics: () => ({
-        narrow: window.innerWidth < 760,
-        topH: topRef.current?.getBoundingClientRect().bottom ?? 0,
-        deckTop: deckRef.current?.getBoundingClientRect().top ?? window.innerHeight,
-      }),
-      onPick: (id) => pickManual(id),
-      reduceMotion: reduce,
-    });
-    sceneRef.current = scene;
-    if (!scene) {
-      setGlOk(false);
-      return;
-    }
-    let observer: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined" && deckRef.current) {
-      observer = new ResizeObserver(() => scene.relayout());
-      observer.observe(deckRef.current);
-    }
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => scene.relayout()).catch(() => undefined);
-    }
+    let cancelled = false;
+    let teardown: (() => void) | null = null;
+    import("./city-scene")
+      .then(({ createCityScene }) => {
+        if (cancelled) return;
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const scene = createCityScene({
+          canvas,
+          tagEls: tagRefs.current,
+          getMetrics: () => ({
+            narrow: window.innerWidth < 760,
+            topH: topRef.current?.getBoundingClientRect().bottom ?? 0,
+            deckTop: deckRef.current?.getBoundingClientRect().top ?? window.innerHeight,
+          }),
+          onPick: (id) => pickManual(id),
+          reduceMotion: reduce,
+        });
+        sceneRef.current = scene;
+        if (!scene) {
+          setGlOk(false);
+          return;
+        }
+        scene.select(selectedRef.current);
+        scene.focus(selectedRef.current ?? "home");
+        setSceneReady((n) => n + 1);
+        requestAnimationFrame(() => requestAnimationFrame(() => canvas.classList.add("on")));
+        let observer: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== "undefined" && deckRef.current) {
+          observer = new ResizeObserver(() => scene.relayout());
+          observer.observe(deckRef.current);
+        }
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => scene.relayout()).catch(() => undefined);
+        }
+        teardown = () => {
+          observer?.disconnect();
+          scene.dispose();
+          sceneRef.current = null;
+        };
+      })
+      .catch(() => {
+        if (!cancelled) setGlOk(false);
+      });
     return () => {
-      observer?.disconnect();
-      scene.dispose();
-      sceneRef.current = null;
+      cancelled = true;
+      teardown?.();
     };
   }, [pickManual]);
 
@@ -506,7 +526,7 @@ export function CityApp() {
             {playing ? "Exit" : "Play"}
           </button>
           <button type="button" aria-pressed={night} aria-label="Toggle night" onClick={() => setNight((v) => !v)}>
-            {night ? "Dusk" : "Night"}
+            {night ? "Day" : "Night"}
           </button>
         </div>
       </div>
@@ -528,7 +548,7 @@ export function CityApp() {
             {playing ? "Exit game" : "Play game"}
           </button>
           <button type="button" aria-pressed={night} onClick={() => setNight((v) => !v)}>
-            {night ? "Dusk" : "Night"}
+            {night ? "Day" : "Night"}
           </button>
         </div>
       </header>
@@ -591,7 +611,7 @@ export function CityApp() {
                 {playing ? "Exit game" : "Play the city"}
               </button>
               <button className="pill alt" type="button" aria-pressed={night} onClick={() => setNight((v) => !v)}>
-                {night ? "Switch to dusk" : "Switch to night"}
+                {night ? "Switch to day" : "Switch to night"}
               </button>
             </div>
             <p className="hint">Drag to turn the island. Click a building or tag to fly in.</p>

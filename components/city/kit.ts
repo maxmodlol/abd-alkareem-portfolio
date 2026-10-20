@@ -56,7 +56,7 @@ export class Kit {
   readonly anims: Anim[] = [];
   readonly hits: THREE.Mesh[] = [];
   readonly boxGeo = new THREE.BoxGeometry(1, 1, 1);
-  /** 0 = golden hour, 1 = night. Updated by the scene every frame. */
+  /** 0 = noon, 1 = night. Updated by the scene every frame. */
   night = 0;
   /** Point lights are skipped on small screens to keep the frame rate up. */
   lightsOn = true;
