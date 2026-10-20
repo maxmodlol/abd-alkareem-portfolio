@@ -197,6 +197,20 @@ export function CityApp() {
   useEffect(() => {
     sceneRef.current?.setMuted(muted);
   }, [muted]);
+  /* Esc leaves a building or closes a panel; in the game it drops you back on the street */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (view !== "home") {
+        e.preventDefault();
+        goHome();
+      } else if (touring) {
+        stopTour();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view, touring, goHome, stopTour]);
   useEffect(() => {
     sceneRef.current?.setNight(night ? 1 : 0.22);
   }, [night]);
@@ -470,6 +484,12 @@ export function CityApp() {
             </button>
           </div>
         </div>
+      ) : null}
+
+      {playing && view !== "home" ? (
+        <button className={`hud-back${sheetOpen ? " sheet" : ""}`} type="button" onClick={() => goHome()}>
+          Back to the game <kbd>Esc</kbd>
+        </button>
       ) : null}
 
       <div className="mtop" ref={topRef}>

@@ -1062,6 +1062,48 @@ h2 {
     transform: translateY(-30px);
   }
 }
+.hud-back {
+  position: fixed;
+  z-index: 7;
+  left: 0;
+  right: 0;
+  bottom: 96px;
+  margin-inline: auto;
+  width: max-content;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--coral);
+  color: #fff;
+  font: 800 16px var(--display);
+  cursor: pointer;
+  box-shadow: 0 12px 28px -10px rgba(242, 92, 84, 0.85);
+  animation: rise 0.25s ease both;
+}
+.hud-back kbd {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.25);
+  font: 800 13px var(--display);
+}
+@media (pointer: coarse), (max-width: 759px) {
+  .hud-back {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    bottom: auto;
+    right: 14px;
+    left: auto;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  .hud-back kbd {
+    display: none;
+  }
+  /* the full-screen sheets have their own close button, which already returns to the game */
+  .hud-back.sheet {
+    display: none;
+  }
+}
 .hud-help kbd {
   padding: 1px 6px;
   border-radius: 5px;
