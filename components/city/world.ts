@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import { canvasTex, rng, type Kit } from "./kit";
+import { windify } from "./nature";
 import type { Folks } from "./people";
 import type { Traffic } from "./traffic";
 
@@ -127,9 +128,46 @@ export function makeSea(scene: THREE.Scene, island: THREE.Group): Sea {
   const seg = 150;
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const base = Float32Array.from(pos.array as ArrayLike<number>);
   const mat = new THREE.MeshStandardMaterial({ color: 0x2a8f9a, roughness: 0.22, metalness: 0.18, flatShading: true });
+  /* the swell runs on the GPU: crests catch a lighter tint and a glint of foam near the island */
+  const seaU = { uTime: { value: 0 }, uCrest: { value: new THREE.Color(0x9fe3e0) }, uNight: { value: 0 } };
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, seaU);
+    sh.vertexShader = sh.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        uniform float uTime;
+        varying float vWave;
+        varying float vRad;`,
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        float wx = position.x; float wz = position.z;
+        float h = sin(wx * 0.35 + uTime * 0.9) * 0.1 + cos(wz * 0.3 + uTime * 0.7) * 0.09
+          + sin((wx + wz) * 0.2 + uTime * 0.5) * 0.12 + sin(wx * 0.9 - wz * 0.7 + uTime * 1.7) * 0.03;
+        transformed.y += h;
+        vWave = h;
+        vRad = length(position.xz);`,
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        uniform float uTime; uniform vec3 uCrest; uniform float uNight;
+        varying float vWave;
+        varying float vRad;`,
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        float crest = smoothstep(0.12, 0.3, vWave);
+        float shore = (1.0 - smoothstep(11.8, 14.5, vRad)) * smoothstep(0.55, 1.0, 0.5 + 0.5 * sin(vRad * 4.0 - uTime * 1.6));
+        diffuseColor.rgb = mix(diffuseColor.rgb, uCrest * (1.0 - uNight * 0.7), clamp(crest * 0.35 + shore * 0.3, 0.0, 1.0));
+        diffuseColor.rgb *= 1.0 - smoothstep(40.0, 120.0, vRad) * 0.25;`,
+      );
+  };
   const sea = new THREE.Mesh(geo, mat);
   sea.position.y = SEA_Y;
   scene.add(sea);
@@ -156,13 +194,8 @@ export function makeSea(scene: THREE.Scene, island: THREE.Group): Sea {
   const nightC = new THREE.Color(0x07243a);
   return {
     update(t, night) {
-      const arr = pos.array as Float32Array;
-      for (let i = 0; i < pos.count; i++) {
-        const x = base[i * 3];
-        const z = base[i * 3 + 2];
-        arr[i * 3 + 1] = Math.sin(x * 0.35 + t * 0.9) * 0.1 + Math.cos(z * 0.3 + t * 0.7) * 0.09 + Math.sin((x + z) * 0.2 + t * 0.5) * 0.12;
-      }
-      pos.needsUpdate = true;
+      seaU.uTime.value = t;
+      seaU.uNight.value = night;
       mat.color.lerpColors(dayC, nightC, night);
       foam.scale.setScalar(1 + Math.sin(t * 0.8) * 0.012);
       foamMat.opacity = 0.3 - night * 0.1;
@@ -244,13 +277,15 @@ export function makeIsland(kit: Kit, island: THREE.Group): void {
 
   /* rim shrubs */
   const shrubGeo = new THREE.IcosahedronGeometry(1, 0);
-  const greens = [0x3faf6e, 0x58c985, 0x2f9a60];
+  const greens = [0x3faf6e, 0x58c985, 0x2f9a60].map((c) =>
+    windify(new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, flatShading: true }), "crown"),
+  );
   for (let i = 0; i < 72; i++) {
     const a = (i / 72) * Math.PI * 2;
     const near = [0, Math.PI / 2, Math.PI, Math.PI * 1.5].some((q) => Math.abs(Math.atan2(Math.sin(a - q), Math.cos(a - q))) < 0.16);
     if (near || falls.some((f) => Math.abs(Math.atan2(Math.sin(a - f), Math.cos(a - f))) < 0.2)) continue;
     const s = 0.16 + rr() * 0.16;
-    const m = kit.put(island, shrubGeo, kit.mat(greens[i % 3], 0.9, 0, true), Math.cos(a) * 11.05, s * 0.7, Math.sin(a) * 11.05, false);
+    const m = kit.put(island, shrubGeo, greens[i % 3], Math.cos(a) * 11.05, s * 0.7, Math.sin(a) * 11.05, false);
     m.scale.set(s * 1.4, s, s * 1.4);
   }
 
@@ -376,7 +411,9 @@ export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, fol
   /* trees: a ring around the rim and a few in the corners */
   const rr = rng(17);
   const trunk = kit.mat(0x8a5a3c, 0.9);
-  const leafA = [kit.mat(0x3faf6e, 0.85, 0, true), kit.mat(0x58c985, 0.85, 0, true), kit.mat(0x2f9a60, 0.85, 0, true)];
+  const leafA = [0x3faf6e, 0x58c985, 0x2f9a60].map((c) =>
+    windify(new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true }), "crown"),
+  );
   const tree = (x: number, z: number, s: number) => {
     const g = new THREE.Group();
     g.position.set(x, 0, z);

@@ -83,6 +83,9 @@ export function CityApp() {
   const [playing, setPlaying] = useState(false);
   const [near, setNear] = useState<BuildingId | null>(null);
   const [coins, setCoins] = useState({ n: 0, total: 0 });
+  const [gems, setGems] = useState({ n: 0, total: 0 });
+  const [combo, setCombo] = useState({ n: 0, key: 0 });
+  const [muted, setMuted] = useState(false);
   const [visited, setVisited] = useState<BuildingId[]>([]);
   const [winSeen, setWinSeen] = useState(false);
   const miniRef = useRef<HTMLCanvasElement>(null);
@@ -151,7 +154,11 @@ export function CityApp() {
     const ok = sceneRef.current?.startPlay({
       onNear: setNear,
       onInteract: (id) => choose(id),
-      onCoin: (n, total) => setCoins({ n, total }),
+      onCoin: (n, total, c) => {
+        setCoins({ n, total });
+        if (c >= 2) setCombo({ n: c, key: n });
+      },
+      onGem: (n, total) => setGems({ n, total }),
     });
     if (!ok) return;
     setVisited([]);
@@ -180,6 +187,16 @@ export function CityApp() {
   };
 
   useEffect(() => () => window.clearInterval(tourTimer.current), []);
+  useEffect(() => {
+    try {
+      setMuted(window.localStorage.getItem("city-muted") === "1");
+    } catch {
+      /* storage is optional */
+    }
+  }, []);
+  useEffect(() => {
+    sceneRef.current?.setMuted(muted);
+  }, [muted]);
   useEffect(() => {
     sceneRef.current?.setNight(night ? 1 : 0.22);
   }, [night]);
@@ -345,23 +362,80 @@ export function CityApp() {
             <div className="hud-bar">
               <i style={{ width: `${(visited.length / projects.length) * 100}%` }} />
             </div>
-            <div className="hud-coins" key={coins.n}>
-              <span className="coin" />
-              {coins.n}
-              <small>/ {coins.total}</small>
+            <div className="hud-row">
+              <div className="hud-coins" key={coins.n}>
+                <span className="coin" />
+                {coins.n}
+                <small>/ {coins.total}</small>
+              </div>
+              <div className="hud-coins hud-gems" key={`g${gems.n}`}>
+                <span className="gem" />
+                {gems.n}
+                <small>/ {gems.total}</small>
+              </div>
+              <button
+                className="hud-mute"
+                type="button"
+                aria-pressed={muted}
+                aria-label={muted ? "Turn sound on" : "Turn sound off"}
+                onClick={() => {
+                  const m = !muted;
+                  setMuted(m);
+                  try {
+                    window.localStorage.setItem("city-muted", m ? "1" : "0");
+                  } catch {
+                    /* storage is optional */
+                  }
+                }}
+              >
+                {muted ? "Sound off" : "Sound on"}
+              </button>
             </div>
           </div>
+          {combo.n >= 2 ? (
+            <div className="hud-combo" key={combo.key} aria-hidden="true">
+              x{combo.n} combo
+            </div>
+          ) : null}
           <canvas ref={miniRef} className="hud-mini" width={300} height={300} aria-hidden="true" />
           {near ? (
             <button className="hud-act" type="button" onClick={() => choose(near)}>
               Enter {projects.find((p) => p.id === near)?.name} <kbd>E</kbd>
             </button>
           ) : null}
-          <p className="hud-help">WASD or arrows to move · Shift to run · Space to jump · E to enter · coins are everywhere</p>
+          <p className="hud-help">
+            <kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump, twice to flip, hold to glide ·{" "}
+            <kbd>Q</kbd> dash · <kbd>1</kbd> wave · <kbd>2</kbd> dance · <kbd>E</kbd> enter · drag to look around ·
+            orange pads launch you to the gems and rooftops
+          </p>
           <Stick onMove={(x, y) => sceneRef.current?.setStick(x, y)} />
-          <button className="hud-jump" type="button" onPointerDown={() => sceneRef.current?.jump()}>
+          <button
+            className="hud-jump"
+            type="button"
+            onPointerDown={(e) => {
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                /* optional */
+              }
+              sceneRef.current?.setJump(true);
+            }}
+            onPointerUp={() => sceneRef.current?.setJump(false)}
+            onPointerCancel={() => sceneRef.current?.setJump(false)}
+          >
             Jump
           </button>
+          <button className="hud-dash" type="button" onPointerDown={() => sceneRef.current?.dash()}>
+            Dash
+          </button>
+          <div className="hud-emotes">
+            <button type="button" onClick={() => sceneRef.current?.emote("wave")}>
+              Wave
+            </button>
+            <button type="button" onClick={() => sceneRef.current?.emote("dance")}>
+              Dance
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -377,7 +451,8 @@ export function CityApp() {
           </div>
           <h2>City explored!</h2>
           <p>
-            You visited all {projects.length} projects and collected {coins.n} of {coins.total} coins.
+            You visited all {projects.length} projects, collected {coins.n} of {coins.total} coins and found {gems.n} of{" "}
+            {gems.total} gems.
           </p>
           <div className="row">
             <button

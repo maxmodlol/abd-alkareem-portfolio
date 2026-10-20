@@ -15,6 +15,14 @@ A portfolio you explore instead of scroll: a small floating island city where ev
 - `lib/content.ts`: experience, skills and contact links.
 - `components/city/city-scene.ts`: the three.js scene, camera rig and input.
 - `components/city/city-app.tsx`: the panel, tabs, phone deck and state.
+- `components/city/hero.ts`: the jointed hero character and his blended animations (idle, walk, run, jump, glide, roll, wave, dance, tumble).
+- `components/city/explorer.ts`: the guided tour route and the game's movement: double jump, glide, dash, bounce pads, roofs and traffic.
+- `components/city/particles.ts` and `components/city/sfx.ts`: game feel, with pooled particles and synthesised sound (no audio files).
+- `components/city/nature.ts`: wind on the trees, grass, wildflowers and butterflies.
+
+## Game controls
+
+WASD or arrows to move, Shift to run, Space to jump (press again in the air to flip, hold to glide), Q to dash, 1 to wave, 2 to dance, E to enter a building, drag to look around. On phones: the stick, Jump (hold to glide) and Dash.
 
 ## Run locally
 

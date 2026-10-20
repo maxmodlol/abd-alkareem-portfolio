@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
@@ -57,7 +58,8 @@ const GRADE = {
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
       col = mix(col, col * vec3(1.07, 1.0, 0.92), smoothstep(0.45, 1.0, l));
       col = mix(col, col * vec3(0.9, 1.0, 1.1), 1.0 - smoothstep(0.0, 0.45, l));
-      col = (col - 0.5) * 1.02 + 0.5;
+      col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 1.08);
+      col = (col - 0.5) * 1.03 + 0.5;
       float d = length(c * vec2(1.0, 0.92));
       col *= mix(1.0, smoothstep(0.88, 0.25, d), uVig);
       col += (hash(vUv * uRes + fract(uTime) * 91.0) - 0.5) * uGrain;
@@ -70,7 +72,7 @@ export function createFx(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.Camera,
-  o: { samples: number; tilt: number },
+  o: { samples: number; tilt: number; ao: boolean },
 ): Fx | null {
   try {
     const size = renderer.getSize(new THREE.Vector2());
@@ -93,6 +95,14 @@ export function createFx(
     grade.uniforms.uTilt.value = o.tilt * 0.4;
     grade.uniforms.uRes.value.set(size.x * pr, size.y * pr);
     composer.addPass(renderPass);
+    /* ambient occlusion: soft contact shadows where walls meet the ground and under the trees */
+    let gtao: GTAOPass | null = null;
+    if (o.ao) {
+      gtao = new GTAOPass(scene, camera, size.x * pr, size.y * pr);
+      gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12 });
+      gtao.blendIntensity = 0.85;
+      composer.addPass(gtao);
+    }
     composer.addPass(bloom);
     composer.addPass(output);
     composer.addPass(grade);
@@ -108,6 +118,7 @@ export function createFx(
       },
       setLite(on) {
         bloom.enabled = !on;
+        if (gtao) gtao.enabled = !on;
         grade.uniforms.uTilt.value = on ? 0 : o.tilt * 0.4;
       },
       setNight(n) {
@@ -116,6 +127,7 @@ export function createFx(
       },
       dispose() {
         renderPass.dispose();
+        gtao?.dispose();
         bloom.dispose();
         output.dispose();
         grade.dispose();

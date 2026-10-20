@@ -1,10 +1,13 @@
 import * as THREE from "three";
 
 import { buildArvo, buildCarebooks, buildDiwan, buildOliva, buildSahefa, buildVillageWellth, buildWatan } from "./buildings";
-import { Explorer, type ExplorerEvents, type RoutePoint } from "./explorer";
+import { Explorer, type ExplorerEvents, type HeroFx, type RoutePoint } from "./explorer";
 import { createFx } from "./fx";
 import { Kit, type BuildingId } from "./kit";
+import { makeMeadow } from "./nature";
+import { Particles } from "./particles";
 import { Folks } from "./people";
+import { Sfx } from "./sfx";
 import { Traffic } from "./traffic";
 import { createSkyMaterial, makeArcs, makeIsland, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
 
@@ -31,7 +34,9 @@ export type CityOptions = {
 export type PlayHandlers = {
   onNear: (id: BuildingId | null) => void;
   onInteract: (id: BuildingId) => void;
-  onCoin: (collected: number, total: number) => void;
+  /** combo counts coins picked up in quick succession. */
+  onCoin: (collected: number, total: number, combo: number) => void;
+  onGem: (collected: number, total: number) => void;
 };
 
 export type CityScene = {
@@ -51,7 +56,11 @@ export type CityScene = {
   setPaused: (paused: boolean) => void;
   /** Touch stick, each axis from -1 to 1 (x right, y forward). */
   setStick: (x: number, y: number) => void;
-  jump: () => void;
+  /** Jump button pressed or released. Holding it in the air glides. */
+  setJump: (down: boolean) => void;
+  dash: () => void;
+  emote: (e: "wave" | "dance") => void;
+  setMuted: (muted: boolean) => void;
   setVisited: (ids: BuildingId[]) => void;
   setMinimap: (canvas: HTMLCanvasElement | null) => void;
   dispose: () => void;
@@ -80,6 +89,19 @@ const BUILDING_POS: Record<BuildingId, [number, number]> = {
 };
 
 const DUSK = 0.22;
+
+/* coins on the roofs, reached with the bounce pads and a glide */
+const ROOF_COINS: [number, number][] = [
+  [4.6, -4.6],
+  [4.0, -4.0],
+  [5.2, -5.2],
+  [-4.6, 4.6],
+  [-4.0, 4.0],
+  [4.6, 4.6],
+  [5.2, 4.0],
+  [9.0, 2.6],
+  [9.0, -2.6],
+];
 
 /* how far from a building's centre the character is blocked */
 const RADIUS: Record<BuildingId, number> = {
@@ -194,25 +216,54 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     arvo: new THREE.Vector3(9.0, 3.4, -2.6),
   });
   makeSkyLife(kit, scene);
-  const explorer = new Explorer(kit, folks, island, WALK_ROUTE);
+  const explorer = new Explorer(kit, island, WALK_ROUTE);
   explorer.colliders = (Object.keys(RADIUS) as BuildingId[]).map((id): [number, number, number] => [
     BUILDING_POS[id][0],
     BUILDING_POS[id][1],
     RADIUS[id],
   ]);
+  explorer.cars = () => traffic.probe();
+  const particles = new Particles(island, startNarrow);
+  const sfx = new Sfx();
 
-  /* coins along the pavements, one instanced mesh */
-  const coinPts: [number, number][] = [];
+  /* solid ground: a ray straight down onto the buildings gives walls and walkable roofs */
+  const solidSets: { x: number; z: number; r: number; meshes: THREE.Mesh[] }[] = [];
+  const probeRay = new THREE.Raycaster();
+  const probeFrom = new THREE.Vector3();
+  const probeDown = new THREE.Vector3(0, -1, 0);
+  const probePt = new THREE.Vector3();
+  const solid = (x: number, z: number): number => {
+    let top = 0;
+    for (const set of solidSets) {
+      if (Math.hypot(x - set.x, z - set.z) > set.r) continue;
+      probeFrom.set(x, 40, z);
+      island.localToWorld(probeFrom);
+      probeRay.set(probeFrom, probeDown);
+      probeRay.far = 60;
+      const hit = probeRay.intersectObjects(set.meshes, false)[0];
+      if (hit) {
+        probePt.copy(hit.point);
+        island.worldToLocal(probePt);
+        top = Math.max(top, probePt.y);
+      }
+    }
+    return top;
+  };
+  explorer.solid = solid;
+
+  /* coins along the pavements, one instanced mesh; roof coins are added once the buildings exist */
+  const coinPts: [number, number, number][] = [];
   const free = (x: number, z: number) => !explorer.colliders.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr + 0.5);
   for (let x = -9.6; x <= 9.7; x += 2.4) {
-    if (free(x, -1.4)) coinPts.push([x, -1.4]);
-    if (free(x, 1.4)) coinPts.push([x, 1.4]);
+    if (free(x, -1.4)) coinPts.push([x, 0.62, -1.4]);
+    if (free(x, 1.4)) coinPts.push([x, 0.62, 1.4]);
   }
   for (let z = -9; z <= 9.1; z += 2.4) {
     if (Math.abs(z) < 2.5) continue;
-    if (free(-1.4, z)) coinPts.push([-1.4, z]);
-    if (free(1.4, z)) coinPts.push([1.4, z]);
+    if (free(-1.4, z)) coinPts.push([-1.4, 0.62, z]);
+    if (free(1.4, z)) coinPts.push([1.4, 0.62, z]);
   }
+  ROOF_COINS.forEach(([x, z]) => coinPts.push([x, -1, z]));
   const coinGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.045, 18);
   coinGeo.rotateX(Math.PI / 2);
   const coinMat = new THREE.MeshStandardMaterial({
@@ -227,13 +278,122 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   coins.frustumCulled = false;
   island.add(coins);
   const coinGot: boolean[] = coinPts.map(() => false);
+  const coinAt: number[] = coinPts.map(() => 0);
   const coinDummy = new THREE.Object3D();
+  let combo = 0;
+  let lastCoin = -10;
 
   const byId = {} as Record<BuildingId, THREE.Object3D>;
   island.children.forEach((c) => {
     if (c.userData.id) byId[c.userData.id as BuildingId] = c;
   });
   const ids = Object.keys(byId) as BuildingId[];
+  for (const id of ids) {
+    const meshes: THREE.Mesh[] = [];
+    byId[id].traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      if (!mat || !mat.visible || mat.transparent) return;
+      meshes.push(m);
+    });
+    solidSets.push({ x: BUILDING_POS[id][0], z: BUILDING_POS[id][1], r: RADIUS[id] + 0.6, meshes });
+  }
+
+  /* bounce pads, gems above them and coins on the roofs you can reach with them */
+  const PADS: [number, number][] = [
+    [-1.4, 8.4],
+    [1.4, -8.4],
+    [7.0, 1.4],
+    [-6.6, -1.4],
+  ];
+  explorer.pads = PADS;
+  const padGroup = new THREE.Group();
+  padGroup.visible = false;
+  island.add(padGroup);
+  const padGlow = kit.glowMat(0xff6b57, 1.6, 4, 0x2a1210);
+  const padTop = new THREE.MeshStandardMaterial({ color: 0xfff4e3, roughness: 0.4, emissive: 0xffb27a, emissiveIntensity: 0.25 });
+  const padArrowMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0xffb27a).multiplyScalar(1.4),
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const arrowShape = new THREE.Shape();
+  arrowShape.moveTo(-0.22, 0);
+  arrowShape.lineTo(0, 0.2);
+  arrowShape.lineTo(0.22, 0);
+  arrowShape.lineTo(0.22, 0.07);
+  arrowShape.lineTo(0, 0.27);
+  arrowShape.lineTo(-0.22, 0.07);
+  arrowShape.closePath();
+  const arrowGeo = new THREE.ShapeGeometry(arrowShape);
+  const pads: { top: THREE.Mesh; arrows: THREE.Mesh[]; kick: number }[] = [];
+  PADS.forEach(([x, z]) => {
+    const g = new THREE.Group();
+    g.position.set(x, 0.06, z);
+    padGroup.add(g);
+    kit.cyl(g, 0.56, 0.62, 0.08, 0x1d2a33, 0, 0, 0, 28);
+    const ring = kit.put(g, new THREE.TorusGeometry(0.5, 0.035, 8, 40), padGlow, 0, 0.09, 0, false);
+    ring.rotation.x = Math.PI / 2;
+    const top = kit.put(g, new THREE.CylinderGeometry(0.42, 0.44, 0.06, 28), padTop, 0, 0.11, 0);
+    const arrows: THREE.Mesh[] = [];
+    for (let i = 0; i < 3; i++) {
+      const a = new THREE.Mesh(arrowGeo, padArrowMat);
+      a.position.y = 0.3 + i * 0.35;
+      g.add(a);
+      const b = new THREE.Mesh(arrowGeo, padArrowMat);
+      b.rotation.y = Math.PI / 2;
+      a.add(b);
+      arrows.push(a);
+    }
+    kit.pointLight(g, 0xff8a6a, 0.4, 1.4, 3, 0, 0.5, 0);
+    pads.push({ top, arrows, kick: 0 });
+  });
+
+  const gemPts: [number, number, number][] = PADS.map(([x, z], i) => {
+    const a = (i * Math.PI) / 2 + 0.6;
+    return [x + Math.sin(a) * 1.3, 3.4, z + Math.cos(a) * 1.3];
+  });
+  const gemGeo = new THREE.OctahedronGeometry(0.26, 0);
+  gemGeo.scale(1, 1.4, 1);
+  const gemMat = new THREE.MeshStandardMaterial({
+    color: 0x7fd3ff,
+    roughness: 0.15,
+    metalness: 0.3,
+    emissive: 0x4aa8ff,
+    emissiveIntensity: 1.1,
+    flatShading: true,
+  });
+  const gems = gemPts.map(([x, y, z]) => {
+    const m = new THREE.Mesh(gemGeo, gemMat);
+    m.position.set(x, y, z);
+    m.visible = false;
+    island.add(m);
+    return m;
+  });
+  const gemGot: boolean[] = gemPts.map(() => false);
+  let gemTotal = 0;
+  island.updateMatrixWorld(true);
+  makeMeadow(
+    kit,
+    island,
+    (x, z) => Math.hypot(x, z) < 10.7 && solid(x, z) < 0.02 && !PADS.some(([px, pz]) => Math.hypot(x - px, z - pz) < 0.9),
+    startNarrow ? { tufts: 900, flowers: 140, butterflies: 6 } : { tufts: 2600, flowers: 340, butterflies: 10 },
+  );
+  for (let i = coinPts.length - 1; i >= 0; i--) {
+    const c = coinPts[i];
+    if (c[1] >= 0) continue;
+    const top = solid(c[0], c[2]);
+    if (top < 0.5 || top > 5.2) {
+      coinPts.splice(i, 1);
+      coinGot.splice(i, 1);
+      coinAt.splice(i, 1);
+    } else c[1] = top + 0.55;
+  }
+  coins.count = coinPts.length;
 
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(3.2, 0.06, 8, 64),
@@ -242,6 +402,61 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   ring.rotation.x = Math.PI / 2;
   ring.visible = false;
   island.add(ring);
+
+  /* game feel: every move the hero makes turns into dust, sparks, rings, sound and a little shake */
+  explorer.onFx = (kind: HeroFx, x: number, y: number, z: number, a: number) => {
+    switch (kind) {
+      case "jump":
+        particles.burst("dust", x, y, z, null, 1.4);
+        sfx.play("jump");
+        break;
+      case "double":
+        particles.burst("spark", x, y + 0.3, z, null, 0.8);
+        particles.ring(x, y, z, 1.2, 0xffe08a);
+        sfx.play("double");
+        break;
+      case "land":
+        particles.burst("land", x, y, z, null, Math.min(1.2, a / 8));
+        sfx.play("land");
+        shake = Math.max(shake, Math.min(0.08, a * 0.008));
+        break;
+      case "bigland":
+        particles.burst("land", x, y, z, null, 2);
+        particles.ring(x, y, z, 3.2);
+        sfx.play("land");
+        shake = Math.max(shake, 0.28);
+        break;
+      case "dash":
+        particles.burst("dust", x, y, z, a + Math.PI, 2);
+        sfx.play("dash");
+        break;
+      case "trail":
+        particles.burst("trail", x, y, z, a + Math.PI);
+        break;
+      case "pad": {
+        particles.burst("pad", x, y + 0.2, z);
+        particles.ring(x, y, z, 2.6, 0xff8a6a);
+        sfx.play("pad");
+        shake = Math.max(shake, 0.1);
+        const p = pads[PADS.findIndex(([px, pz]) => px === x && pz === z)];
+        if (p) p.kick = 1;
+        break;
+      }
+      case "runstep":
+        particles.burst("dust", x, y, z, a + Math.PI, 0.6);
+        sfx.play("step");
+        break;
+      case "step":
+        break;
+      case "hit":
+        particles.burst("hit", x, y, z);
+        particles.ring(x, 0, z, 1.8, 0xf25c54);
+        sfx.play("hit");
+        shake = Math.max(shake, 0.4);
+        hitStop = 0.14;
+        break;
+    }
+  };
 
   /* ---------- camera rig ---------- */
   const spec = (id: BuildingId, y: number, d: number, w: number, hh: number, pitch: number): FocusSpec => {
@@ -284,6 +499,10 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   const keys = new Set<string>();
   const stick = { x: 0, y: 0 };
   let walkOff = 0;
+  let playYaw = 0;
+  let playPitch = 0.34;
+  let shake = 0;
+  let hitStop = 0;
   let lite = false;
   let fx: ReturnType<typeof createFx> = null;
 
@@ -316,6 +535,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     renderer.setPixelRatio(pr);
     renderer.setSize(w, h, false);
     fx?.resize(w, h, pr);
+    particles.setViewport(h * pr, narrow ? 58 : 46);
     camera.aspect = w / h;
     camera.clearViewOffset();
     if (!narrow) {
@@ -334,7 +554,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     applyFocus(currentKey, true);
   };
   layout();
-  fx = createFx(renderer, scene, camera, { samples: startNarrow ? 0 : 4, tilt: startNarrow ? 0 : 1 });
+  fx = createFx(renderer, scene, camera, { samples: startNarrow ? 0 : 4, tilt: startNarrow ? 0 : 1, ao: !startNarrow });
   layout();
   const t0 = performance.now();
   const introMs = reduceMotion ? 1 : 3200;
@@ -402,7 +622,12 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       down.moved += Math.abs(dx) + Math.abs(dy);
       down.x = e.clientX;
       down.y = e.clientY;
-      if (walking || playing) {
+      if (playing) {
+        playYaw -= dx * 0.007;
+        playPitch = Math.min(0.95, Math.max(0.08, playPitch + dy * 0.004));
+        return;
+      }
+      if (walking) {
         walkOff = Math.max(-2.2, Math.min(2.2, walkOff - dx * 0.006));
         idleAt = performance.now() + 4000;
         return;
@@ -450,13 +675,35 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) e.preventDefault();
       keys.add(key);
       if (e.repeat || paused) return;
-      if (key === "e" && nearId) playH?.onInteract(nearId);
-      if (key === " ") explorer.jump();
+      sfx.unlock();
+      if (key === "e" && nearId) {
+        sfx.play("enter");
+        playH?.onInteract(nearId);
+      }
+      if (key === " ") explorer.setJump(true);
+      if (key === "q" || key === "x") explorer.dash();
+      if (key === "1") explorer.setEmote("wave");
+      if (key === "2") explorer.setEmote("dance");
     },
     { signal },
   );
-  window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()), { signal });
-  window.addEventListener("blur", () => keys.clear(), { signal });
+  window.addEventListener(
+    "keyup",
+    (e) => {
+      const key = e.key.toLowerCase();
+      keys.delete(key);
+      if (key === " ") explorer.setJump(false);
+    },
+    { signal },
+  );
+  window.addEventListener(
+    "blur",
+    () => {
+      keys.clear();
+      explorer.setJump(false);
+    },
+    { signal },
+  );
 
   /* ---------- minimap: the island seen from above, turned so that ahead is up ---------- */
   const drawMini = () => {
@@ -495,9 +742,26 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     ctx.fillStyle = "#ffc83d";
     for (let i = 0; i < coinPts.length; i++) {
       if (coinGot[i]) continue;
-      const q = P(coinPts[i][0], coinPts[i][1]);
+      const q = P(coinPts[i][0], coinPts[i][2]);
       ctx.fillRect(q[0] - 1.5, q[1] - 1.5, 3, 3);
     }
+    ctx.fillStyle = "#ff8a6a";
+    for (const [x, z] of PADS) {
+      const q = P(x, z);
+      ctx.beginPath();
+      ctx.arc(q[0], q[1], 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#7fd3ff";
+    gemPts.forEach(([x, , z], i) => {
+      if (gemGot[i]) return;
+      const q = P(x, z);
+      ctx.save();
+      ctx.translate(q[0], q[1]);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-3, -3, 6, 6);
+      ctx.restore();
+    });
     for (const id of ids) {
       const q = P(BUILDING_POS[id][0], BUILDING_POS[id][1]);
       ctx.fillStyle = visitedSet.has(id) ? "#58c985" : "#f25c54";
@@ -568,7 +832,10 @@ export function createCityScene(opts: CityOptions): CityScene | null {
 
     if (!reduceMotion) {
       folks.update(t, dt);
-      explorer.update(t, dt);
+      hitStop = Math.max(0, hitStop - dt);
+      const hdt = hitStop > 0 ? dt * 0.12 : dt;
+      explorer.update(t, hdt);
+      particles.update(hdt);
       traffic.update(t, dt);
       for (const a of kit.anims) a(t, dt);
     } else {
@@ -578,11 +845,11 @@ export function createCityScene(opts: CityOptions): CityScene | null {
 
     if (playing) {
       const kd = (a: string, b: string) => keys.has(a) || keys.has(b);
-      const turn = (kd("d", "arrowright") ? 1 : 0) - (kd("a", "arrowleft") ? 1 : 0) + stick.x;
+      const side = (kd("d", "arrowright") ? 1 : 0) - (kd("a", "arrowleft") ? 1 : 0) + stick.x;
       const fwd = (kd("w", "arrowup") ? 1 : 0) - (kd("s", "arrowdown") ? 1 : 0) + stick.y;
       const run = keys.has("shift") || Math.hypot(stick.x, stick.y) > 0.92;
-      if (paused) explorer.setInput(0, 0, false);
-      else explorer.setInput(turn, fwd, run);
+      if (paused) explorer.setInput(0, 0, false, playYaw);
+      else explorer.setInput(side, fwd, run, playYaw);
 
       let best: BuildingId | null = null;
       let bd = Infinity;
@@ -598,19 +865,65 @@ export function createCityScene(opts: CityOptions): CityScene | null {
         playH?.onNear(best);
       }
 
+      const hy = explorer.py + 0.55;
       for (let i = 0; i < coinPts.length; i++) {
-        if (!coinGot[i] && Math.hypot(explorer.px - coinPts[i][0], explorer.pz - coinPts[i][1]) < 0.7) {
+        const [cx, cy, cz] = coinPts[i];
+        if (!coinGot[i] && Math.hypot(explorer.px - cx, explorer.pz - cz) < 0.7 && Math.abs(hy - cy) < 0.85) {
           coinGot[i] = true;
+          coinAt[i] = t;
           coinTotal += 1;
-          playH?.onCoin(coinTotal, coinPts.length);
+          combo = t - lastCoin < 1.6 ? combo + 1 : 1;
+          lastCoin = t;
+          particles.burst("spark", cx, cy, cz, null, Math.min(2, 0.7 + combo * 0.12));
+          sfx.play("coin", combo - 1);
+          playH?.onCoin(coinTotal, coinPts.length, combo);
         }
-        coinDummy.position.set(coinPts[i][0], 0.62 + Math.sin(t * 3 + i) * 0.07, coinPts[i][1]);
-        coinDummy.rotation.set(0, t * 3 + i, 0);
-        coinDummy.scale.setScalar(coinGot[i] ? 0.0001 : 1);
+        const bob = Math.sin(t * 3 + i) * 0.07;
+        if (coinGot[i]) {
+          const u = (t - coinAt[i]) / 0.35;
+          coinDummy.position.set(cx, cy + bob + Math.min(1, u) * 0.9, cz);
+          coinDummy.rotation.set(0, t * 14, 0);
+          coinDummy.scale.setScalar(u < 1 ? (1 + u * 0.8) * (1 - u) + 0.0001 : 0.0001);
+        } else {
+          coinDummy.position.set(cx, cy + bob, cz);
+          coinDummy.rotation.set(0, t * 3 + i, 0);
+          coinDummy.scale.setScalar(1);
+        }
         coinDummy.updateMatrix();
         coins.setMatrixAt(i, coinDummy.matrix);
       }
       coins.instanceMatrix.needsUpdate = true;
+
+      gems.forEach((g, i) => {
+        if (gemGot[i]) return;
+        const [gx, gy, gz] = gemPts[i];
+        g.position.y = gy + Math.sin(t * 2 + i) * 0.12;
+        g.rotation.y = t * 1.6 + i;
+        const d = Math.hypot(explorer.px - gx, explorer.pz - gz, hy - g.position.y);
+        if (d < 0.8) {
+          gemGot[i] = true;
+          g.visible = false;
+          gemTotal += 1;
+          particles.burst("gem", gx, g.position.y, gz);
+          particles.ring(gx, explorer.py, gz, 2.2, 0x7fd3ff);
+          sfx.play("gem");
+          shake = Math.max(shake, 0.12);
+          playH?.onGem(gemTotal, gemPts.length);
+        }
+      });
+      gemMat.emissiveIntensity = 0.9 + Math.sin(t * 4) * 0.3;
+
+      pads.forEach((p) => {
+        p.kick = Math.max(0, p.kick - dt * 3);
+        p.top.scale.y = 1 - p.kick * 0.6;
+        p.arrows.forEach((a, i) => {
+          const u = (t * 0.9 + i / 3) % 1;
+          a.position.y = 0.25 + u * 1.1;
+          a.scale.setScalar(0.8 + (1 - u) * 0.4);
+          a.rotation.y = t * 1.2;
+        });
+      });
+      padArrowMat.opacity = 0.35 + Math.sin(t * 5) * 0.15;
 
       miniTick += 1;
       if (mini && miniTick % 2 === 0) drawMini();
@@ -622,10 +935,16 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       island.localToWorld(v);
       goal.t.copy(v);
       if (playing) {
-        goal.yaw += angDiff(goal.yaw, explorer.heading + Math.PI + walkOff);
-        goal.pitch = 0.36;
-        goal.dist = narrow ? 8.2 : 6.2;
-        goal.fov = narrow ? 58 : 46;
+        /* the camera drifts behind him while he moves; dragging orbits it */
+        const sp = explorer.speed;
+        if (ptrs.size === 0 && sp > 0.6 && !paused) {
+          playYaw += angDiff(playYaw, explorer.heading + Math.PI) * Math.min(1, dt * 0.5 * Math.min(1, sp / 4));
+        }
+        const air = Math.max(0, explorer.py);
+        goal.yaw = goal.yaw + angDiff(goal.yaw, playYaw);
+        goal.pitch = playPitch + Math.min(0.35, air * 0.05);
+        goal.dist = (narrow ? 8.4 : 6.6) + sp * 0.32 + Math.min(5, air * 0.7);
+        goal.fov = (narrow ? 58 : 46) + Math.min(8, sp * 1.4);
       } else {
         const dwell = explorer.dwelling;
         const want = explorer.heading + (dwell ? 0.55 : Math.PI) + walkOff;
@@ -636,7 +955,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       }
       if (ptrs.size === 0) walkOff *= 1 - Math.min(1, dt * 0.7);
     } else if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0) goal.yaw += 0.0007;
-    const kk = reduceMotion ? 1 : playing ? 0.12 : walking ? 0.09 : k;
+    const kk = reduceMotion ? 1 : 1 - Math.pow(1 - (playing ? 0.12 : walking ? 0.09 : k), dt * 60);
     cam.yaw += (goal.yaw - cam.yaw) * kk;
     cam.pitch += (goal.pitch - cam.pitch) * kk;
     cam.dist += (goal.dist - cam.dist) * kk;
@@ -656,6 +975,12 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       cam.t.z + Math.cos(yaw) * cp * dist,
     );
     camera.lookAt(cam.t);
+    if (shake > 0.001) {
+      camera.position.x += (Math.random() - 0.5) * shake;
+      camera.position.y += (Math.random() - 0.5) * shake;
+      camera.position.z += (Math.random() - 0.5) * shake;
+      shake *= Math.max(0, 1 - dt * 7);
+    }
     if (!narrow && Math.abs(offGoal - offX) > 0.3) {
       offX += (offGoal - offX) * 0.1;
       camera.setViewOffset(window.innerWidth, window.innerHeight, offX, 0, window.innerWidth, window.innerHeight);
@@ -694,7 +1019,9 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       island.localToWorld(v);
       v.project(camera);
       const x = (v.x * 0.5 + 0.5) * w;
-      const y = (-v.y * 0.5 + 0.5) * h;
+      /* keep the label below the top bar, where the tallest tower would otherwise hide it */
+      const sy = (-v.y * 0.5 + 0.5) * h;
+      const y = !narrow && sy > -80 && sy < 128 ? 128 : sy;
       el.style.transform = `translate3d(${Math.round(x)}px,${Math.round(y - 6)}px,0) translate(-50%,-100%)`;
     });
   };
@@ -742,6 +1069,8 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     dispose: () => {
       cancelAnimationFrame(raf);
       explorer.dispose();
+      particles.dispose();
+      sfx.dispose();
       abort.abort();
       const seen = new Set<THREE.Texture>();
       scene.traverse((obj) => {
@@ -771,9 +1100,15 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       if (reduceMotion) return false;
       api.stopWalk();
       playH = h;
+      sfx.unlock();
       coinGot.fill(false);
       coinTotal = 0;
+      combo = 0;
       coins.visible = true;
+      gemGot.fill(false);
+      gemTotal = 0;
+      gems.forEach((g) => (g.visible = true));
+      padGroup.visible = true;
       playing = true;
       paused = false;
       nearId = null;
@@ -782,7 +1117,10 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       fx?.setLite(true);
       layout();
       explorer.startFree(-1.5, 1.4, Math.PI / 2);
-      h.onCoin(0, coinPts.length);
+      playYaw = -Math.PI / 2;
+      playPitch = 0.34;
+      h.onCoin(0, coinPts.length, 0);
+      h.onGem(0, gemPts.length);
       return true;
     },
     stopPlay: () => {
@@ -790,8 +1128,10 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       playing = false;
       lite = false;
       explorer.stop();
-      explorer.setInput(0, 0, false);
+      explorer.setInput(0, 0, false, 0);
       coins.visible = false;
+      gems.forEach((g) => (g.visible = false));
+      padGroup.visible = false;
       nearId = null;
       keys.clear();
       stick.x = 0;
@@ -811,8 +1151,19 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       stick.x = Math.max(-1, Math.min(1, x));
       stick.y = Math.max(-1, Math.min(1, y));
     },
-    jump: () => {
-      if (playing && !paused) explorer.jump();
+    setJump: (down) => {
+      if (!playing) return;
+      sfx.unlock();
+      explorer.setJump(down && !paused);
+    },
+    dash: () => {
+      if (playing && !paused) explorer.dash();
+    },
+    emote: (e) => {
+      if (playing && !paused) explorer.setEmote(e);
+    },
+    setMuted: (m) => {
+      sfx.muted = m;
     },
     setVisited: (ids) => {
       visitedSet = new Set(ids);

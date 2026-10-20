@@ -28,6 +28,7 @@ const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 export class Traffic {
   readonly zones: Zone[] = [];
   private cars: Car[] = [];
+  private probes: { x: number; z: number; axis: Axis; dir: Dir; v: number }[] = [];
   private ewRed = false;
   private nsRed = true;
   private beamMat: THREE.MeshBasicMaterial;
@@ -103,6 +104,17 @@ export class Traffic {
     const g = this.buildCar(kind, color);
     parent.add(g);
     this.cars.push({ g, axis, dir, lane: axis === "x" ? 0.4 * dir : -0.4 * dir, u, v: 0, max });
+  }
+
+  /** Where every visible car is and how fast it moves, for the game's collisions. */
+  probe(): { x: number; z: number; axis: Axis; dir: Dir; v: number }[] {
+    const out = this.probes;
+    out.length = 0;
+    for (const c of this.cars) {
+      if (!c.g.visible) continue;
+      out.push({ x: c.g.position.x, z: c.g.position.z, axis: c.axis, dir: c.dir, v: c.v });
+    }
+    return out;
   }
 
   /** Four-way traffic lights on poles at the corners of the crossing. */
