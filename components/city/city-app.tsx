@@ -73,6 +73,20 @@ const tabs: { id: Tab; desktop: string; mobile: string }[] = [
   { id: "contact", desktop: "Contact", mobile: "Contact" },
 ];
 
+/** True when WebGL runs on the processor instead of a graphics card. */
+function softwareGl(): boolean {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl");
+    if (!gl) return false;
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return /swiftshader|llvmpipe|software|basic render/i.test(name);
+  } catch {
+    return false;
+  }
+}
+
 export function CityApp() {
   const [view, setView] = useState<View>("home");
   const [selected, setSelected] = useState<BuildingId | null>(null);
@@ -250,11 +264,30 @@ export function CityApp() {
     if (!canvas) return;
     let cancelled = false;
     let teardown: (() => void) | null = null;
-    import("./city-scene")
-      .then(({ createCityScene }) => {
+    /* start once the page has painted and gone quiet, so the first screen is never held up. Without a
+       graphics card the island would freeze the page for seconds, so there it waits for the first touch. */
+    const idle = new Promise<void>((r) => {
+      const go = () => ("requestIdleCallback" in window ? window.requestIdleCallback(() => r(), { timeout: 1500 }) : setTimeout(r, 200));
+      if (document.readyState === "complete") go();
+      else window.addEventListener("load", go, { once: true });
+    }).then(
+      () =>
+        new Promise<void>((r) => {
+          if (!softwareGl()) return r();
+          const evs = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+          const wake = () => {
+            evs.forEach((e) => window.removeEventListener(e, wake));
+            r();
+          };
+          evs.forEach((e) => window.addEventListener(e, wake, { passive: true }));
+        }),
+    );
+    idle
+      .then(() => import("./city-scene"))
+      .then(async ({ createCityScene }) => {
         if (cancelled) return;
         const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        const scene = createCityScene({
+        const scene = await createCityScene({
           canvas,
           tagEls: tagRefs.current,
           getMetrics: () => ({
@@ -265,6 +298,10 @@ export function CityApp() {
           onPick: (id) => pickManual(id),
           reduceMotion: reduce,
         });
+        if (cancelled) {
+          scene?.dispose();
+          return;
+        }
         sceneRef.current = scene;
         if (!scene) {
           setGlOk(false);
@@ -360,6 +397,12 @@ export function CityApp() {
 
   return (
     <div className={`city${playing ? " playing" : ""}${selected ? " sel" : ""}`} data-gl={glOk ? "on" : "off"}>
+      {/* a picture of the island shows at once and stays as the fallback; the live island fades in over it */}
+      <picture className="poster">
+        <source media="(max-width: 759px)" srcSet="/island-tall.webp" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/island-wide.webp" alt="" fetchPriority="high" decoding="async" />
+      </picture>
       <canvas ref={canvasRef} id="scene" aria-hidden="true" />
       <div className="bars" aria-hidden="true" />
       <div className="intro" aria-hidden="true">

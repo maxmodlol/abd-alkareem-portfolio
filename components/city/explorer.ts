@@ -71,7 +71,7 @@ export class Explorer {
   cars: () => CarProbe[] = () => [];
   onFx: (kind: HeroFx, x: number, y: number, z: number, a: number) => void = () => undefined;
 
-  private ring: THREE.Mesh;
+  readonly ring: THREE.Mesh;
   private route: RoutePoint[];
   private events: ExplorerEvents | null = null;
   private state: "off" | "walk" | "dwell" | "free" = "off";

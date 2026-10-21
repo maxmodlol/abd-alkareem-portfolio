@@ -12,6 +12,8 @@ export type Fx = {
   setNight: (n: number) => void;
   /** Cheaper frames for the walking tour: no bloom, no tilt-shift blur. */
   setLite: (on: boolean) => void;
+  /** Quality step from the frame governor: 1 drops ambient occlusion, 2 drops bloom too. */
+  setTier: (tier: number) => void;
   dispose: () => void;
 };
 
@@ -106,6 +108,13 @@ export function createFx(
     composer.addPass(bloom);
     composer.addPass(output);
     composer.addPass(grade);
+    let lite = false;
+    let tier = 0;
+    const apply = () => {
+      bloom.enabled = !lite && tier < 2;
+      if (gtao) gtao.enabled = !lite && tier < 1;
+      grade.uniforms.uTilt.value = lite ? 0 : o.tilt * 0.15;
+    };
     return {
       render(dt, t) {
         grade.uniforms.uTime.value = t;
@@ -117,9 +126,12 @@ export function createFx(
         grade.uniforms.uRes.value.set(w * ratio, h * ratio);
       },
       setLite(on) {
-        bloom.enabled = !on;
-        if (gtao) gtao.enabled = !on;
-        grade.uniforms.uTilt.value = on ? 0 : o.tilt * 0.15;
+        lite = on;
+        apply();
+      },
+      setTier(t) {
+        tier = t;
+        apply();
       },
       setNight(n) {
         /* daylight is bright everywhere, so only real lights bloom; at night the windows and lamps do */

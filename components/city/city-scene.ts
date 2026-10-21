@@ -11,6 +11,7 @@ import { Sfx } from "./sfx";
 import { Traffic } from "./traffic";
 import { createPhysicalSky, makeArcs, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
 import { grassR, makeCoast, makeDowntown, makeIslets, Palms, SGSOFT_POS, SGSOFT_ROT, type Solid } from "./coast";
+import { mergeStatic } from "./merge";
 import { setTextureDetail } from "./textures";
 
 export type { BuildingId };
@@ -148,7 +149,15 @@ function angDiff(a: number, b: number): number {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
 
-export function createCityScene(opts: CityOptions): CityScene | null {
+/* hands the main thread back between building steps, so taps and scrolls stay instant while the island is built */
+const breathe = () =>
+  new Promise<void>((r) => {
+    const s = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+    if (s?.yield) s.yield().then(r, r);
+    else setTimeout(r, 0);
+  });
+
+export async function createCityScene(opts: CityOptions): Promise<CityScene | null> {
   const { canvas, tagEls, getMetrics, onPick, reduceMotion } = opts;
   const startNarrow = getMetrics().narrow;
 
@@ -158,9 +167,22 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   } catch {
     return null;
   }
+  /* error checks read shader status back synchronously, which stalls the first frames */
+  renderer.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
-  renderer.shadowMap.enabled = !startNarrow;
+  /* no graphics card (software rendering, as in many test and remote machines): a still island that redraws when you move it */
+  const soft = (() => {
+    try {
+      const gl = renderer.getContext();
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      return /swiftshader|llvmpipe|software|basic render/i.test(String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)));
+    } catch {
+      return false;
+    }
+  })();
+  const cheap = startNarrow || soft;
+  renderer.shadowMap.enabled = !cheap;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const abort = new AbortController();
@@ -174,7 +196,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   const hemi = new THREE.HemisphereLight(0xd6ecff, 0x6f8f5a, 1.5);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffc58a, 3.6);
-  sun.castShadow = !startNarrow;
+  sun.castShadow = !cheap;
   sun.shadow.mapSize.set(4096, 4096);
   sun.shadow.radius = 3;
   sun.shadow.camera.left = -19;
@@ -201,32 +223,39 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   const envRT = pmrem.fromScene(envScene, 0.02);
   scene.environment = envRT.texture;
   scene.environmentIntensity = 0.7;
+  await breathe();
 
   /* the world */
   setTextureDetail(startNarrow);
   const kit = new Kit();
-  kit.lightsOn = !startNarrow;
+  kit.lightsOn = !cheap;
   const folks = new Folks(kit);
   const traffic = new Traffic(kit);
   const sky = makeSky(scene);
   const island = new THREE.Group();
   scene.add(island);
   const sea = makeSea(scene);
+  await breathe();
   const palms = new Palms();
   const extraSolids: Solid[] = makeCoast(kit, island, palms);
+  await breathe();
   makeIslets(kit, scene, palms);
   extraSolids.push(...makeDowntown(kit, island, palms));
+  await breathe();
   buildVillageWellth(kit, folks, island);
   buildSahefa(kit, folks, island);
   buildDiwan(kit, folks, island);
+  await breathe();
   buildOliva(kit, folks, island);
   const watan = buildWatan(kit, folks, island);
   buildCarebooks(kit, folks, island, "CareBooks");
   buildArvo(kit, folks, island, "Arvo");
   buildSgsoft(kit, folks, island, SGSOFT_POS, SGSOFT_ROT);
+  await breathe();
   traffic.zones.push({ axis: "x", dir: -1, stop: -7.55, red: () => !watan.gate.open });
   traffic.zones.push({ axis: "x", dir: 1, stop: -8.85, red: () => !watan.gate.open });
   makeStreets(kit, island, traffic, folks, palms);
+  await breathe();
   palms.build(island, !startNarrow);
   makeArcs(kit, island, {
     villagewellth: new THREE.Vector3(-4.6, 9.3, -4.6),
@@ -239,6 +268,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     sgsoft: new THREE.Vector3(SGSOFT_POS[0], 7.6, SGSOFT_POS[1]),
   });
   makeSkyLife(kit, scene);
+  await breathe();
   const explorer = new Explorer(kit, island, WALK_ROUTE);
   explorer.colliders = (Object.keys(RADIUS) as BuildingId[]).map((id): [number, number, number] => [
     BUILDING_POS[id][0],
@@ -411,6 +441,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   });
   const gemGot: boolean[] = gemPts.map(() => false);
   let gemTotal = 0;
+  await breathe();
   island.updateMatrixWorld(true);
   makeMeadow(
     kit,
@@ -429,6 +460,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     } else c[1] = top + 0.55;
   }
   coins.count = coinPts.length;
+  await breathe();
 
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(3.2, 0.06, 8, 64),
@@ -540,6 +572,8 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   let shake = 0;
   let hitStop = 0;
   let lite = false;
+  /* 0 is full quality; the frame governor below raises it while frames run slow */
+  let tier = 0;
   let fx: ReturnType<typeof createFx> = null;
 
   const fovFor = (key: FocusKey) => (narrow ? 50 : key === "home" ? 34 : 30);
@@ -567,7 +601,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     const w = window.innerWidth;
     const h = window.innerHeight;
     narrow = m.narrow;
-    const pr = Math.min(window.devicePixelRatio || 1, narrow || lite ? 1.5 : 2);
+    const pr = Math.min(window.devicePixelRatio || 1, narrow ? 1.25 : lite ? 1.5 : 2, [2, 1, 0.85, 0.7, 0.7][tier]);
     renderer.setPixelRatio(pr);
     renderer.setSize(w, h, false);
     fx?.resize(w, h, pr);
@@ -590,10 +624,29 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     applyFocus(currentKey, true);
   };
   layout();
-  fx = createFx(renderer, scene, camera, { samples: startNarrow ? 0 : 4, tilt: startNarrow ? 0 : 1, ao: !startNarrow });
+  await breathe();
+  /* bake everything that stands still into a few meshes; the scene was ~1,800 draw calls a frame */
+  mergeStatic(scene, {
+    anchors: ids.map((id) => byId[id]),
+    skip: [explorer.root, explorer.ring, padGroup, ring, ...gems],
+    simulate: () => {
+      for (const n of [0, 1]) {
+        kit.night = n;
+        for (let t = 0.13; t < 40; t += 3.71) {
+          folks.update(t, 0.05);
+          traffic.update(t, 0.05);
+          for (const a of kit.anims) a(t, 0.05);
+        }
+      }
+      kit.night = 0;
+    },
+  });
+  await breathe();
+  /* without a graphics card the post effects cost more than the whole island, so draw it plainly */
+  fx = soft ? null : createFx(renderer, scene, camera, { samples: cheap ? 0 : 4, tilt: startNarrow ? 0 : 1, ao: !cheap });
   layout();
   const t0 = performance.now();
-  const introMs = reduceMotion ? 1 : 3200;
+  const introMs = reduceMotion || soft ? 1 : 3200;
   cam.dist = goal.dist;
   window.addEventListener("resize", layout, { signal });
 
@@ -836,7 +889,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   };
 
   /* ---------- loop ---------- */
-  const k = reduceMotion ? 1 : 0.06;
+  const k = reduceMotion ? 1 : soft ? 0.3 : 0.06;
   const v = new THREE.Vector3();
   const sunDay = new THREE.Vector3(-0.5, 0.72, 0.48).normalize();
   const sunNight = new THREE.Vector3(-0.45, 0.75, 0.5).normalize();
@@ -850,8 +903,78 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   let raf = 0;
   let last = performance.now();
 
+  /* Frame governor. It watches how long frames really take and, while they run slow, steps down:
+     lower resolution with no ambient occlusion and fewer shadow updates, then no bloom, then even
+     lower resolution, then half the frame rate. Phones also drop to half rate when nobody is touching. */
+  let tick = 0;
+  let prevCall = 0;
+  let winN = 0;
+  let winSlow = 0;
+  let winGap = 0;
+  let winStart = 0;
+  let settleUntil = 0;
+  let good = 0;
+  const recovered = new Set<number>();
+  let lastInput = performance.now();
+  let softSig = "";
+  let softLeft = 0;
+  const touched = () => {
+    lastInput = performance.now();
+    softLeft = 6;
+  };
+  for (const ev of ["pointerdown", "pointermove", "keydown", "wheel"]) window.addEventListener(ev, touched, { signal, passive: true });
+  const setTier = (next: number) => {
+    tier = next;
+    fx?.setTier(tier);
+    renderer.shadowMap.autoUpdate = tier < 1;
+    renderer.shadowMap.needsUpdate = true;
+    settleUntil = performance.now() + 600;
+    good = 0;
+    layout();
+  };
+  /* judged over about a second of frames, so a single hiccup never costs quality */
+  const govern = (now: number, work: number, half: boolean) => {
+    const gap = (now - prevCall) / (half ? 2 : 1);
+    prevCall = now;
+    if (now < settleUntil || gap > 5000) {
+      winN = winSlow = winGap = 0;
+      winStart = now;
+      return;
+    }
+    winN++;
+    winGap += gap;
+    if (gap > 28 || work > 14) winSlow++;
+    if (now - winStart < 1000 || winN < 3) return;
+    /* very slow frames skip straight to the cheap end */
+    if (winGap / winN > 90 && tier < 3) setTier(3);
+    else if (winSlow > winN * 0.4 && tier < 4) setTier(tier + 1);
+    else if (winSlow === 0 && tier > 0 && !soft && !recovered.has(tier) && ++good >= 3) {
+      /* a few smooth seconds earn one step back up, once, so it never see-saws */
+      recovered.add(tier);
+      setTier(tier - 1);
+    }
+    if (winSlow) good = 0;
+    winN = winSlow = winGap = 0;
+    winStart = now;
+  };
+
   const frame = (now: number) => {
+    const began = performance.now();
     raf = requestAnimationFrame(frame);
+    tick++;
+    const calm = narrow && !playing && !walking && now - lastInput > 6000 && now - t0 > introMs;
+    const half = tier >= 4 || calm;
+    if (half && tick % 2) return;
+    if (soft && !playing && !walking) {
+      const sig = `${currentKey}|${selected}|${hoverId}|${nightGoal}|${panelOpen}|${ptrs.size}|${camera.aspect}`;
+      if (sig !== softSig) {
+        softSig = sig;
+        touched();
+      }
+      if (now - lastInput > 1500 && softLeft <= 0) return;
+      softLeft--;
+    }
+    if (!renderer.shadowMap.autoUpdate && tick % 6 === 0) renderer.shadowMap.needsUpdate = true;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const t = reduceMotion ? 0 : (now - t0) / 1000;
@@ -874,6 +997,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     fx?.setNight(n);
     sea.update(t, n);
 
+    folks.cull(camera.position, 36);
     if (!reduceMotion) {
       folks.update(t, dt);
       hitStop = Math.max(0, hitStop - dt);
@@ -998,7 +1122,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
         goal.fov = narrow ? 56 : 42;
       }
       if (ptrs.size === 0) walkOff *= 1 - Math.min(1, dt * 0.7);
-    } else if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0) goal.yaw += 0.0007;
+    } else if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0 && !soft) goal.yaw += dt * 0.042;
     const kk = reduceMotion ? 1 : 1 - Math.pow(1 - (playing ? 0.12 : walking ? 0.09 : k), dt * 60);
     cam.yaw += (goal.yaw - cam.yaw) * kk;
     cam.pitch += (goal.pitch - cam.pitch) * kk;
@@ -1067,7 +1191,40 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       const y = !narrow && sy > -80 && sy < 128 ? 128 : sy;
       el.style.transform = `translate3d(${Math.round(x)}px,${Math.round(y - 6)}px,0) translate(-50%,-100%)`;
     });
+    govern(now, performance.now() - began, half);
   };
+  /* compile every shader up front without blocking, instead of all at once inside the first frame */
+  try {
+    await renderer.compileAsync(scene, camera);
+  } catch {
+    /* older browsers compile on first use */
+  }
+  /* and upload the textures a few at a time, instead of all of them inside the first frame */
+  const textures = new Set<THREE.Texture>();
+  scene.traverse((o) => {
+    const mats = (o as THREE.Mesh).material;
+    if (!mats) return;
+    for (const m of Array.isArray(mats) ? mats : [mats]) {
+      for (const v of Object.values(m)) if (v instanceof THREE.Texture) textures.add(v);
+    }
+  });
+  let up = 0;
+  for (const tex of textures) {
+    renderer.initTexture(tex);
+    if (++up % 6 === 0) await breathe();
+  }
+  if (soft) {
+    setTier(4);
+    /* no fly-in: start on the finished view */
+    cam.yaw = goal.yaw;
+    cam.pitch = goal.pitch;
+    cam.dist = goal.dist;
+    cam.fov = goal.fov;
+    cam.t.copy(goal.t);
+  }
+  touched();
+  /* the first frames still warm up the post effects, so judge from a moment later */
+  settleUntil = performance.now() + 1500;
   raf = requestAnimationFrame(frame);
 
   const api: CityScene = {
