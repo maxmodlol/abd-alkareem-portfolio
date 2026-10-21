@@ -264,26 +264,34 @@ export function CityApp() {
     if (!canvas) return;
     let cancelled = false;
     let teardown: (() => void) | null = null;
-    /* start once the page has painted and gone quiet, so the first screen is never held up. Without a
-       graphics card the island would freeze the page for seconds, so there it waits for the first touch. */
-    const idle = new Promise<void>((r) => {
+    /* The picture of the island is the first view. The live island is fetched once the page is idle and
+       built on the first sign of a visitor (a move, tap, scroll or key), or after a few quiet seconds, so
+       none of its work lands while the page is loading. Without a graphics card it waits for a real touch. */
+    const loaded = new Promise<void>((r) => {
       const go = () => ("requestIdleCallback" in window ? window.requestIdleCallback(() => r(), { timeout: 1500 }) : setTimeout(r, 200));
       if (document.readyState === "complete") go();
       else window.addEventListener("load", go, { once: true });
-    }).then(
+    });
+    const code = loaded.then(() => import("./city-scene"));
+    const intent = loaded.then(
       () =>
         new Promise<void>((r) => {
-          if (!softwareGl()) return r();
-          const evs = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+          const soft = softwareGl();
+          const evs = soft
+            ? (["pointerdown", "keydown", "wheel", "touchstart"] as const)
+            : (["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const);
+          let timer = 0;
           const wake = () => {
-            evs.forEach((e) => window.removeEventListener(e, wake));
+            evs.forEach((e) => window.removeEventListener(e, wake, true));
+            window.clearTimeout(timer);
             r();
           };
-          evs.forEach((e) => window.addEventListener(e, wake, { passive: true }));
+          evs.forEach((e) => window.addEventListener(e, wake, { passive: true, capture: true }));
+          if (!soft) timer = window.setTimeout(wake, 6000);
         }),
     );
+    const idle = Promise.all([code, intent]).then(([mod]) => mod);
     idle
-      .then(() => import("./city-scene"))
       .then(async ({ createCityScene }) => {
         if (cancelled) return;
         const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
