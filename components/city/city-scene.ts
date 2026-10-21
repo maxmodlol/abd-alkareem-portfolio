@@ -1,12 +1,18 @@
 import * as THREE from "three";
 
-import { buildArvo, buildCarebooks, buildDiwan, buildOliva, buildSahefa, buildVillageWellth, buildWatan } from "./buildings";
-import { Explorer, type ExplorerEvents, type RoutePoint } from "./explorer";
+import { buildArvo, buildCarebooks, buildDiwan, buildOliva, buildSahefa, buildSgsoft, buildVillageWellth, buildWatan } from "./buildings";
+import { Explorer, type ExplorerEvents, type HeroFx, type RoutePoint } from "./explorer";
 import { createFx } from "./fx";
 import { Kit, type BuildingId } from "./kit";
+import { makeMeadow } from "./nature";
+import { Particles } from "./particles";
 import { Folks } from "./people";
+import { Sfx } from "./sfx";
 import { Traffic } from "./traffic";
-import { createSkyMaterial, makeArcs, makeIsland, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
+import { createPhysicalSky, makeArcs, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
+import { grassR, makeCoast, makeDowntown, makeIslets, Palms, SGSOFT_POS, SGSOFT_ROT, type Solid } from "./coast";
+import { mergeStatic } from "./merge";
+import { prepareTextures } from "./textures";
 
 export type { BuildingId };
 export type FocusKey = BuildingId | "home";
@@ -31,14 +37,16 @@ export type CityOptions = {
 export type PlayHandlers = {
   onNear: (id: BuildingId | null) => void;
   onInteract: (id: BuildingId) => void;
-  onCoin: (collected: number, total: number) => void;
+  /** combo counts coins picked up in quick succession. */
+  onCoin: (collected: number, total: number, combo: number) => void;
+  onGem: (collected: number, total: number) => void;
 };
 
 export type CityScene = {
   focus: (key: FocusKey) => void;
   select: (id: BuildingId | null) => void;
   relayout: () => void;
-  /** 0 is golden hour, 1 is deep night. */
+  /** 0 is clear noon, 1 is deep night. */
   setNight: (n: number) => void;
   /** Shifts the island sideways on desktop while the detail card is open. */
   setPanelOpen: (open: boolean) => void;
@@ -51,7 +59,11 @@ export type CityScene = {
   setPaused: (paused: boolean) => void;
   /** Touch stick, each axis from -1 to 1 (x right, y forward). */
   setStick: (x: number, y: number) => void;
-  jump: () => void;
+  /** Jump button pressed or released. Holding it in the air glides. */
+  setJump: (down: boolean) => void;
+  dash: () => void;
+  emote: (e: "wave" | "dance") => void;
+  setMuted: (muted: boolean) => void;
   setVisited: (ids: BuildingId[]) => void;
   setMinimap: (canvas: HTMLCanvasElement | null) => void;
   dispose: () => void;
@@ -67,6 +79,7 @@ const TAG_HEIGHT: Record<BuildingId, number> = {
   watan: 4.9,
   carebooks: 4.4,
   arvo: 4.2,
+  sgsoft: 4.9,
 };
 
 const BUILDING_POS: Record<BuildingId, [number, number]> = {
@@ -77,9 +90,24 @@ const BUILDING_POS: Record<BuildingId, [number, number]> = {
   watan: [-8.2, 0],
   carebooks: [9.0, 2.6],
   arvo: [9.0, -2.6],
+  sgsoft: SGSOFT_POS,
 };
 
-const DUSK = 0.22;
+/** Daytime is clear tropical noon; 1 is night. */
+export const DAY = 0;
+
+/* coins on the roofs, reached with the bounce pads and a glide */
+const ROOF_COINS: [number, number][] = [
+  [4.6, -4.6],
+  [4.0, -4.0],
+  [5.2, -5.2],
+  [-4.6, 4.6],
+  [-4.0, 4.0],
+  [4.6, 4.6],
+  [5.2, 4.0],
+  [9.0, 2.6],
+  [9.0, -2.6],
+];
 
 /* how far from a building's centre the character is blocked */
 const RADIUS: Record<BuildingId, number> = {
@@ -90,6 +118,7 @@ const RADIUS: Record<BuildingId, number> = {
   watan: 1.2,
   carebooks: 1.6,
   arvo: 1.6,
+  sgsoft: 1.35,
 };
 
 /* the guided walk: pavement on both sides of the main road, one stop in front of each building */
@@ -101,6 +130,12 @@ const WALK_ROUTE: RoutePoint[] = [
   { at: [4.6, 1.4], stop: { id: "oliva", look: [4.6, 4.6] } },
   { at: [-4.6, 1.4], stop: { id: "diwan", look: [-4.6, 4.6] } },
   { at: [-6.4, 1.4], stop: { id: "watan", look: [-8.2, 0] } },
+  { at: [-6.4, -1.4] },
+  { at: [-7.7, -4.3] },
+  { at: [-7.7, -8.4] },
+  { at: [-5.5, -9.1], stop: { id: "sgsoft", look: SGSOFT_POS } },
+  { at: [-7.7, -8.4] },
+  { at: [-7.7, -4.3] },
   { at: [-6.4, -1.4] },
 ];
 
@@ -114,9 +149,27 @@ function angDiff(a: number, b: number): number {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
 
-export function createCityScene(opts: CityOptions): CityScene | null {
+/* hands the main thread back between building steps, so taps and scrolls stay instant while the island is built */
+const breathe = () =>
+  new Promise<void>((r) => {
+    const s = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+    if (s?.yield) s.yield().then(r, r);
+    else setTimeout(r, 0);
+  });
+
+/* the same, but only once the current slice of work has run for a few milliseconds */
+let sliceAt = 0;
+const pause = async () => {
+  if (performance.now() - sliceAt < 8) return;
+  await breathe();
+  sliceAt = performance.now();
+};
+
+export async function createCityScene(opts: CityOptions): Promise<CityScene | null> {
   const { canvas, tagEls, getMetrics, onPick, reduceMotion } = opts;
   const startNarrow = getMetrics().narrow;
+  /* the ground and sea maps are worked out in the background while the renderer and sky get going */
+  const texturesReady = prepareTextures(startNarrow);
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -124,9 +177,22 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   } catch {
     return null;
   }
+  /* error checks read shader status back synchronously, which stalls the first frames */
+  renderer.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
-  renderer.shadowMap.enabled = !startNarrow;
+  /* no graphics card (software rendering, as in many test and remote machines): a still island that redraws when you move it */
+  const soft = (() => {
+    try {
+      const gl = renderer.getContext();
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      return /swiftshader|llvmpipe|software|basic render/i.test(String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)));
+    } catch {
+      return false;
+    }
+  })();
+  const cheap = startNarrow || soft;
+  renderer.shadowMap.enabled = !cheap;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const abort = new AbortController();
@@ -134,18 +200,19 @@ export function createCityScene(opts: CityOptions): CityScene | null {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 900);
-  scene.fog = new THREE.FogExp2(0xffb36b, 0.0075);
+  scene.fog = new THREE.FogExp2(0xcfeaf8, 0.006);
 
-  /* light rig: a low sun that turns into moonlight, plus a cool fill */
-  const hemi = new THREE.HemisphereLight(0xffd2a8, 0x3b6a6f, 1.5);
+  /* light rig: a bright tropical sun that turns into moonlight, plus a cool fill */
+  const hemi = new THREE.HemisphereLight(0xd6ecff, 0x6f8f5a, 1.5);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffc58a, 3.6);
-  sun.castShadow = !startNarrow;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -15;
-  sun.shadow.camera.right = 15;
-  sun.shadow.camera.top = 15;
-  sun.shadow.camera.bottom = -15;
+  sun.castShadow = !cheap;
+  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.radius = 3;
+  sun.shadow.camera.left = -19;
+  sun.shadow.camera.right = 19;
+  sun.shadow.camera.top = 19;
+  sun.shadow.camera.bottom = -19;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 80;
   sun.shadow.bias = -0.0004;
@@ -158,32 +225,66 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   /* soft reflections from the sky, used by glass and water */
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
-  const envMesh = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), createSkyMaterial());
+  const envSky = createPhysicalSky();
+  envSky.mesh.scale.setScalar(40);
+  envSky.set(new THREE.Vector3(-0.5, 0.72, 0.48).normalize(), 1);
+  const envMesh = envSky.mesh;
   envScene.add(envMesh);
+  /* compile the sky shader in the background first, so the reflections below don't wait on it */
+  const envWarm = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  renderer.setRenderTarget(envWarm);
+  try {
+    await renderer.compileAsync(envScene, camera);
+  } catch {
+    /* compiled on first use instead */
+  }
+  renderer.setRenderTarget(null);
+  envWarm.dispose();
+  await breathe();
   const envRT = pmrem.fromScene(envScene, 0.02);
   scene.environment = envRT.texture;
-  scene.environmentIntensity = 0.55;
+  scene.environmentIntensity = 0.7;
+  await breathe();
 
   /* the world */
   const kit = new Kit();
-  kit.lightsOn = !startNarrow;
+  kit.lightsOn = !cheap;
   const folks = new Folks(kit);
   const traffic = new Traffic(kit);
   const sky = makeSky(scene);
   const island = new THREE.Group();
   scene.add(island);
-  const sea = makeSea(scene, island);
-  makeIsland(kit, island);
+  await texturesReady;
+  const sea = makeSea(scene);
+  await breathe();
+  const palms = new Palms();
+  const extraSolids: Solid[] = makeCoast(kit, island, palms);
+  await breathe();
+  makeIslets(kit, scene, palms);
+  await breathe();
+  extraSolids.push(...makeDowntown(kit, island, palms));
+  await breathe();
   buildVillageWellth(kit, folks, island);
+  await breathe();
   buildSahefa(kit, folks, island);
+  await breathe();
   buildDiwan(kit, folks, island);
+  await breathe();
   buildOliva(kit, folks, island);
+  await breathe();
   const watan = buildWatan(kit, folks, island);
+  await breathe();
   buildCarebooks(kit, folks, island, "CareBooks");
   buildArvo(kit, folks, island, "Arvo");
+  await breathe();
+  buildSgsoft(kit, folks, island, SGSOFT_POS, SGSOFT_ROT);
+  await breathe();
   traffic.zones.push({ axis: "x", dir: -1, stop: -7.55, red: () => !watan.gate.open });
   traffic.zones.push({ axis: "x", dir: 1, stop: -8.85, red: () => !watan.gate.open });
-  makeStreets(kit, island, traffic, folks);
+  makeStreets(kit, island, traffic, folks, palms);
+  await breathe();
+  palms.build(island, !startNarrow);
+  await breathe();
   makeArcs(kit, island, {
     villagewellth: new THREE.Vector3(-4.6, 9.3, -4.6),
     sahefa: new THREE.Vector3(4.6, 3.4, -4.6),
@@ -192,27 +293,60 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     watan: new THREE.Vector3(-8.2, 4.4, 0),
     carebooks: new THREE.Vector3(9.0, 3.6, 2.6),
     arvo: new THREE.Vector3(9.0, 3.4, -2.6),
+    sgsoft: new THREE.Vector3(SGSOFT_POS[0], 7.6, SGSOFT_POS[1]),
   });
   makeSkyLife(kit, scene);
-  const explorer = new Explorer(kit, folks, island, WALK_ROUTE);
+  await breathe();
+  const explorer = new Explorer(kit, island, WALK_ROUTE);
   explorer.colliders = (Object.keys(RADIUS) as BuildingId[]).map((id): [number, number, number] => [
     BUILDING_POS[id][0],
     BUILDING_POS[id][1],
     RADIUS[id],
   ]);
+  explorer.cars = () => traffic.probe();
+  /* the whole lawn is walkable, downtown included, up to a step from the sand */
+  explorer.edge = (a) => grassR(a) - 0.55;
+  const particles = new Particles(island, startNarrow);
+  const sfx = new Sfx();
 
-  /* coins along the pavements, one instanced mesh */
-  const coinPts: [number, number][] = [];
+  /* solid ground: a ray straight down onto the buildings gives walls and walkable roofs */
+  const solidSets: { x: number; z: number; r: number; meshes: THREE.Mesh[] }[] = [];
+  const probeRay = new THREE.Raycaster();
+  const probeFrom = new THREE.Vector3();
+  const probeDown = new THREE.Vector3(0, -1, 0);
+  const probePt = new THREE.Vector3();
+  const solid = (x: number, z: number): number => {
+    let top = 0;
+    for (const set of solidSets) {
+      if (Math.hypot(x - set.x, z - set.z) > set.r) continue;
+      probeFrom.set(x, 40, z);
+      island.localToWorld(probeFrom);
+      probeRay.set(probeFrom, probeDown);
+      probeRay.far = 60;
+      const hit = probeRay.intersectObjects(set.meshes, false)[0];
+      if (hit) {
+        probePt.copy(hit.point);
+        island.worldToLocal(probePt);
+        top = Math.max(top, probePt.y);
+      }
+    }
+    return top;
+  };
+  explorer.solid = solid;
+
+  /* coins along the pavements, one instanced mesh; roof coins are added once the buildings exist */
+  const coinPts: [number, number, number][] = [];
   const free = (x: number, z: number) => !explorer.colliders.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr + 0.5);
   for (let x = -9.6; x <= 9.7; x += 2.4) {
-    if (free(x, -1.4)) coinPts.push([x, -1.4]);
-    if (free(x, 1.4)) coinPts.push([x, 1.4]);
+    if (free(x, -1.4)) coinPts.push([x, 0.62, -1.4]);
+    if (free(x, 1.4)) coinPts.push([x, 0.62, 1.4]);
   }
   for (let z = -9; z <= 9.1; z += 2.4) {
     if (Math.abs(z) < 2.5) continue;
-    if (free(-1.4, z)) coinPts.push([-1.4, z]);
-    if (free(1.4, z)) coinPts.push([1.4, z]);
+    if (free(-1.4, z)) coinPts.push([-1.4, 0.62, z]);
+    if (free(1.4, z)) coinPts.push([1.4, 0.62, z]);
   }
+  ROOF_COINS.forEach(([x, z]) => coinPts.push([x, -1, z]));
   const coinGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.045, 18);
   coinGeo.rotateX(Math.PI / 2);
   const coinMat = new THREE.MeshStandardMaterial({
@@ -227,13 +361,134 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   coins.frustumCulled = false;
   island.add(coins);
   const coinGot: boolean[] = coinPts.map(() => false);
+  const coinAt: number[] = coinPts.map(() => 0);
   const coinDummy = new THREE.Object3D();
+  let combo = 0;
+  let lastCoin = -10;
 
   const byId = {} as Record<BuildingId, THREE.Object3D>;
   island.children.forEach((c) => {
     if (c.userData.id) byId[c.userData.id as BuildingId] = c;
   });
   const ids = Object.keys(byId) as BuildingId[];
+  for (const id of ids) {
+    const meshes: THREE.Mesh[] = [];
+    byId[id].traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      if (!mat || !mat.visible || mat.transparent) return;
+      meshes.push(m);
+    });
+    solidSets.push({ x: BUILDING_POS[id][0], z: BUILDING_POS[id][1], r: RADIUS[id] + 0.6, meshes });
+  }
+  /* downtown towers and the road portals are solid too */
+  for (const s of extraSolids) {
+    const meshes: THREE.Mesh[] = [];
+    s.obj.traverse((o) => {
+      const m = o as THREE.Mesh;
+      const mat = m.isMesh ? (Array.isArray(m.material) ? m.material[0] : m.material) : null;
+      if (mat && mat.visible && !mat.transparent) meshes.push(m);
+    });
+    solidSets.push({ x: s.x, z: s.z, r: s.r, meshes });
+  }
+
+  /* bounce pads, gems above them and coins on the roofs you can reach with them */
+  const PADS: [number, number][] = [
+    [-1.4, 8.4],
+    [1.4, -8.4],
+    [7.0, 1.4],
+    [-6.6, -1.4],
+  ];
+  explorer.pads = PADS;
+  const padGroup = new THREE.Group();
+  padGroup.visible = false;
+  island.add(padGroup);
+  const padGlow = kit.glowMat(0xff6b57, 1.6, 4, 0x2a1210);
+  const padTop = new THREE.MeshStandardMaterial({ color: 0xfff4e3, roughness: 0.4, emissive: 0xffb27a, emissiveIntensity: 0.25 });
+  const padArrowMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0xffb27a).multiplyScalar(1.4),
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const arrowShape = new THREE.Shape();
+  arrowShape.moveTo(-0.22, 0);
+  arrowShape.lineTo(0, 0.2);
+  arrowShape.lineTo(0.22, 0);
+  arrowShape.lineTo(0.22, 0.07);
+  arrowShape.lineTo(0, 0.27);
+  arrowShape.lineTo(-0.22, 0.07);
+  arrowShape.closePath();
+  const arrowGeo = new THREE.ShapeGeometry(arrowShape);
+  const pads: { top: THREE.Mesh; arrows: THREE.Mesh[]; kick: number }[] = [];
+  PADS.forEach(([x, z]) => {
+    const g = new THREE.Group();
+    g.position.set(x, 0.06, z);
+    padGroup.add(g);
+    kit.cyl(g, 0.56, 0.62, 0.08, 0x1d2a33, 0, 0, 0, 28);
+    const ring = kit.put(g, new THREE.TorusGeometry(0.5, 0.035, 8, 40), padGlow, 0, 0.09, 0, false);
+    ring.rotation.x = Math.PI / 2;
+    const top = kit.put(g, new THREE.CylinderGeometry(0.42, 0.44, 0.06, 28), padTop, 0, 0.11, 0);
+    const arrows: THREE.Mesh[] = [];
+    for (let i = 0; i < 3; i++) {
+      const a = new THREE.Mesh(arrowGeo, padArrowMat);
+      a.position.y = 0.3 + i * 0.35;
+      g.add(a);
+      const b = new THREE.Mesh(arrowGeo, padArrowMat);
+      b.rotation.y = Math.PI / 2;
+      a.add(b);
+      arrows.push(a);
+    }
+    kit.pointLight(g, 0xff8a6a, 0.4, 1.4, 3, 0, 0.5, 0);
+    pads.push({ top, arrows, kick: 0 });
+  });
+
+  const gemPts: [number, number, number][] = PADS.map(([x, z], i) => {
+    const a = (i * Math.PI) / 2 + 0.6;
+    return [x + Math.sin(a) * 1.3, 3.4, z + Math.cos(a) * 1.3];
+  });
+  const gemGeo = new THREE.OctahedronGeometry(0.26, 0);
+  gemGeo.scale(1, 1.4, 1);
+  const gemMat = new THREE.MeshStandardMaterial({
+    color: 0x7fd3ff,
+    roughness: 0.15,
+    metalness: 0.3,
+    emissive: 0x4aa8ff,
+    emissiveIntensity: 1.1,
+    flatShading: true,
+  });
+  const gems = gemPts.map(([x, y, z]) => {
+    const m = new THREE.Mesh(gemGeo, gemMat);
+    m.position.set(x, y, z);
+    m.visible = false;
+    island.add(m);
+    return m;
+  });
+  const gemGot: boolean[] = gemPts.map(() => false);
+  let gemTotal = 0;
+  await breathe();
+  island.updateMatrixWorld(true);
+  makeMeadow(
+    kit,
+    island,
+    (x, z) => Math.hypot(x, z) < 10.7 && solid(x, z) < 0.02 && !PADS.some(([px, pz]) => Math.hypot(x - px, z - pz) < 0.9),
+    startNarrow ? { tufts: 900, flowers: 140, butterflies: 6 } : { tufts: 2600, flowers: 340, butterflies: 10 },
+  );
+  for (let i = coinPts.length - 1; i >= 0; i--) {
+    const c = coinPts[i];
+    if (c[1] >= 0) continue;
+    const top = solid(c[0], c[2]);
+    if (top < 0.5 || top > 5.2) {
+      coinPts.splice(i, 1);
+      coinGot.splice(i, 1);
+      coinAt.splice(i, 1);
+    } else c[1] = top + 0.55;
+  }
+  coins.count = coinPts.length;
+  await breathe();
 
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(3.2, 0.06, 8, 64),
@@ -243,13 +498,68 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   ring.visible = false;
   island.add(ring);
 
+  /* game feel: every move the hero makes turns into dust, sparks, rings, sound and a little shake */
+  explorer.onFx = (kind: HeroFx, x: number, y: number, z: number, a: number) => {
+    switch (kind) {
+      case "jump":
+        particles.burst("dust", x, y, z, null, 1.4);
+        sfx.play("jump");
+        break;
+      case "double":
+        particles.burst("spark", x, y + 0.3, z, null, 0.8);
+        particles.ring(x, y, z, 1.2, 0xffe08a);
+        sfx.play("double");
+        break;
+      case "land":
+        particles.burst("land", x, y, z, null, Math.min(1.2, a / 8));
+        sfx.play("land");
+        shake = Math.max(shake, Math.min(0.08, a * 0.008));
+        break;
+      case "bigland":
+        particles.burst("land", x, y, z, null, 2);
+        particles.ring(x, y, z, 3.2);
+        sfx.play("land");
+        shake = Math.max(shake, 0.28);
+        break;
+      case "dash":
+        particles.burst("dust", x, y, z, a + Math.PI, 2);
+        sfx.play("dash");
+        break;
+      case "trail":
+        particles.burst("trail", x, y, z, a + Math.PI);
+        break;
+      case "pad": {
+        particles.burst("pad", x, y + 0.2, z);
+        particles.ring(x, y, z, 2.6, 0xff8a6a);
+        sfx.play("pad");
+        shake = Math.max(shake, 0.1);
+        const p = pads[PADS.findIndex(([px, pz]) => px === x && pz === z)];
+        if (p) p.kick = 1;
+        break;
+      }
+      case "runstep":
+        particles.burst("dust", x, y, z, a + Math.PI, 0.6);
+        sfx.play("step");
+        break;
+      case "step":
+        break;
+      case "hit":
+        particles.burst("hit", x, y, z);
+        particles.ring(x, 0, z, 1.8, 0xf25c54);
+        sfx.play("hit");
+        shake = Math.max(shake, 0.4);
+        hitStop = 0.14;
+        break;
+    }
+  };
+
   /* ---------- camera rig ---------- */
   const spec = (id: BuildingId, y: number, d: number, w: number, hh: number, pitch: number): FocusSpec => {
     const [x, z] = BUILDING_POS[id];
     return { t: [x, y, z], d, yaw: Math.atan2(-x, -z), pitch, w, hh };
   };
   const focusSpecs: Record<FocusKey, FocusSpec> = {
-    home: { t: [0, 1.6, 0], d: 36, yaw: 0.75, pitch: 0.55, w: 12.5, hh: 9 },
+    home: { t: [-1.4, 2.2, -1.4], d: 50, yaw: 0.75, pitch: 0.6, w: 15, hh: 11 },
     villagewellth: spec("villagewellth", 4.0, 25, 4.8, 5.2, 0.3),
     sahefa: spec("sahefa", 1.3, 17.5, 5.4, 3.0, 0.4),
     diwan: spec("diwan", 1.1, 16.5, 5.0, 2.7, 0.38),
@@ -257,6 +567,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     carebooks: { t: [9.0, 1.3, 2.6], d: 16, yaw: Math.PI * 0.92, pitch: 0.36, w: 3.8, hh: 3.2 },
     arvo: { t: [9.0, 1.3, -2.6], d: 16, yaw: 0.2, pitch: 0.36, w: 3.8, hh: 3.2 },
     watan: { t: [-8.2, 1.5, 0], d: 15, yaw: Math.PI / 2, pitch: 0.34, w: 4.8, hh: 3.4 },
+    sgsoft: { t: [SGSOFT_POS[0], 3.4, SGSOFT_POS[1]], d: 20, yaw: SGSOFT_ROT + 0.5, pitch: 0.3, w: 4.2, hh: 5.4 },
   };
 
   const cam = { yaw: 0.2, pitch: 0.5, dist: 40, fov: 34, t: new THREE.Vector3(0, 0, 0) };
@@ -271,7 +582,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   let panelOpen = false;
   let offX = 0;
   let offGoal = 0;
-  let nightGoal = DUSK;
+  let nightGoal = DAY;
   let walking = false;
   let playing = false;
   let paused = false;
@@ -284,7 +595,13 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   const keys = new Set<string>();
   const stick = { x: 0, y: 0 };
   let walkOff = 0;
+  let playYaw = 0;
+  let playPitch = 0.34;
+  let shake = 0;
+  let hitStop = 0;
   let lite = false;
+  /* 0 is full quality; the frame governor below raises it while frames run slow */
+  let tier = 0;
   let fx: ReturnType<typeof createFx> = null;
 
   const fovFor = (key: FocusKey) => (narrow ? 50 : key === "home" ? 34 : 30);
@@ -312,10 +629,11 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     const w = window.innerWidth;
     const h = window.innerHeight;
     narrow = m.narrow;
-    const pr = Math.min(window.devicePixelRatio || 1, narrow || lite ? 1.5 : 2);
+    const pr = Math.min(window.devicePixelRatio || 1, narrow ? 1.25 : lite ? 1.5 : 2, [2, 1, 0.85, 0.7, 0.7][tier]);
     renderer.setPixelRatio(pr);
     renderer.setSize(w, h, false);
     fx?.resize(w, h, pr);
+    particles.setViewport(h * pr, narrow ? 58 : 46);
     camera.aspect = w / h;
     camera.clearViewOffset();
     if (!narrow) {
@@ -334,10 +652,30 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     applyFocus(currentKey, true);
   };
   layout();
-  fx = createFx(renderer, scene, camera, { samples: startNarrow ? 0 : 4, tilt: startNarrow ? 0 : 1 });
+  await breathe();
+  /* bake everything that stands still into a few meshes; the scene was ~1,800 draw calls a frame */
+  await mergeStatic(scene, {
+    pause,
+    anchors: ids.map((id) => byId[id]),
+    skip: [explorer.root, explorer.ring, padGroup, ring, ...gems],
+    simulate: () => {
+      for (const n of [0, 1]) {
+        kit.night = n;
+        for (let t = 0.13; t < 40; t += 3.71) {
+          folks.update(t, 0.05);
+          traffic.update(t, 0.05);
+          for (const a of kit.anims) a(t, 0.05);
+        }
+      }
+      kit.night = 0;
+    },
+  });
+  await breathe();
+  /* without a graphics card the post effects cost more than the whole island, so draw it plainly */
+  fx = soft ? null : createFx(renderer, scene, camera, { samples: cheap ? 0 : 4, tilt: startNarrow ? 0 : 1, ao: !cheap });
   layout();
   const t0 = performance.now();
-  const introMs = reduceMotion ? 1 : 3200;
+  const introMs = reduceMotion || soft ? 1 : 3200;
   cam.dist = goal.dist;
   window.addEventListener("resize", layout, { signal });
 
@@ -402,7 +740,12 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       down.moved += Math.abs(dx) + Math.abs(dy);
       down.x = e.clientX;
       down.y = e.clientY;
-      if (walking || playing) {
+      if (playing) {
+        playYaw -= dx * 0.007;
+        playPitch = Math.min(0.95, Math.max(0.08, playPitch + dy * 0.004));
+        return;
+      }
+      if (walking) {
         walkOff = Math.max(-2.2, Math.min(2.2, walkOff - dx * 0.006));
         idleAt = performance.now() + 4000;
         return;
@@ -450,13 +793,35 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) e.preventDefault();
       keys.add(key);
       if (e.repeat || paused) return;
-      if (key === "e" && nearId) playH?.onInteract(nearId);
-      if (key === " ") explorer.jump();
+      sfx.unlock();
+      if (key === "e" && nearId) {
+        sfx.play("enter");
+        playH?.onInteract(nearId);
+      }
+      if (key === " ") explorer.setJump(true);
+      if (key === "q" || key === "x") explorer.dash();
+      if (key === "1") explorer.setEmote("wave");
+      if (key === "2") explorer.setEmote("dance");
     },
     { signal },
   );
-  window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()), { signal });
-  window.addEventListener("blur", () => keys.clear(), { signal });
+  window.addEventListener(
+    "keyup",
+    (e) => {
+      const key = e.key.toLowerCase();
+      keys.delete(key);
+      if (key === " ") explorer.setJump(false);
+    },
+    { signal },
+  );
+  window.addEventListener(
+    "blur",
+    () => {
+      keys.clear();
+      explorer.setJump(false);
+    },
+    { signal },
+  );
 
   /* ---------- minimap: the island seen from above, turned so that ahead is up ---------- */
   const drawMini = () => {
@@ -464,7 +829,7 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     const ctx = mini.getContext("2d");
     if (!ctx) return;
     const S = mini.width;
-    const sc = S / 25;
+    const sc = S / 38;
     const cy = Math.cos(cam.yaw);
     const sy = Math.sin(cam.yaw);
     const P = (x: number, z: number): [number, number] => [S / 2 + (x * cy - z * sy) * sc, S / 2 + (x * sy + z * cy) * sc];
@@ -473,13 +838,21 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     ctx.beginPath();
     ctx.arc(S / 2, S / 2, S / 2 - 1, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = "rgba(11,48,57,0.88)";
+    ctx.fillStyle = "rgba(20,130,170,0.9)";
     ctx.fillRect(0, 0, S, S);
-    const [ox, oz] = P(0, 0);
-    ctx.fillStyle = "#3f7a52";
-    ctx.beginPath();
-    ctx.arc(ox, oz, 11 * sc, 0, Math.PI * 2);
-    ctx.fill();
+    /* the island's real outline: sand, then lawn */
+    for (const [col, off] of [["#d9b06a", 1.7], ["#3f7a52", 0]] as const) {
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      for (let i = 0; i <= 72; i++) {
+        const an = (i / 72) * Math.PI * 2;
+        const r = grassR(an) + off;
+        const q = P(Math.cos(an) * r, Math.sin(an) * r);
+        if (i === 0) ctx.moveTo(q[0], q[1]);
+        else ctx.lineTo(q[0], q[1]);
+      }
+      ctx.fill();
+    }
     ctx.strokeStyle = "#5b6770";
     ctx.lineWidth = 2 * sc;
     ctx.beginPath();
@@ -495,9 +868,26 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     ctx.fillStyle = "#ffc83d";
     for (let i = 0; i < coinPts.length; i++) {
       if (coinGot[i]) continue;
-      const q = P(coinPts[i][0], coinPts[i][1]);
+      const q = P(coinPts[i][0], coinPts[i][2]);
       ctx.fillRect(q[0] - 1.5, q[1] - 1.5, 3, 3);
     }
+    ctx.fillStyle = "#ff8a6a";
+    for (const [x, z] of PADS) {
+      const q = P(x, z);
+      ctx.beginPath();
+      ctx.arc(q[0], q[1], 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#7fd3ff";
+    gemPts.forEach(([x, , z], i) => {
+      if (gemGot[i]) return;
+      const q = P(x, z);
+      ctx.save();
+      ctx.translate(q[0], q[1]);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-3, -3, 6, 6);
+      ctx.restore();
+    });
     for (const id of ids) {
       const q = P(BUILDING_POS[id][0], BUILDING_POS[id][1]);
       ctx.fillStyle = visitedSet.has(id) ? "#58c985" : "#f25c54";
@@ -528,22 +918,92 @@ export function createCityScene(opts: CityOptions): CityScene | null {
   };
 
   /* ---------- loop ---------- */
-  const k = reduceMotion ? 1 : 0.06;
+  const k = reduceMotion ? 1 : soft ? 0.3 : 0.06;
   const v = new THREE.Vector3();
-  const sunDay = new THREE.Vector3(-0.62, 0.34, 0.7).normalize();
+  const sunDay = new THREE.Vector3(-0.5, 0.72, 0.48).normalize();
   const sunNight = new THREE.Vector3(-0.45, 0.75, 0.5).normalize();
   const sunDir = new THREE.Vector3();
-  const cSunDay = new THREE.Color(0xffc58a);
+  const cSunDay = new THREE.Color(0xfff0d8);
   const cSunNight = new THREE.Color(0x9bb8ff);
-  const hSkyDay = new THREE.Color(0xffd2a8);
+  const hSkyDay = new THREE.Color(0xd6ecff);
   const hSkyNight = new THREE.Color(0x5a6fb8);
-  const hGroundDay = new THREE.Color(0x3b6a6f);
+  const hGroundDay = new THREE.Color(0x6f8f5a);
   const hGroundNight = new THREE.Color(0x0b1b2a);
   let raf = 0;
   let last = performance.now();
 
+  /* Frame governor. It watches how long frames really take and, while they run slow, steps down:
+     lower resolution with no ambient occlusion and fewer shadow updates, then no bloom, then even
+     lower resolution, then half the frame rate. Phones also drop to half rate when nobody is touching. */
+  let tick = 0;
+  let prevCall = 0;
+  let winN = 0;
+  let winSlow = 0;
+  let winGap = 0;
+  let winStart = 0;
+  let settleUntil = 0;
+  let good = 0;
+  const recovered = new Set<number>();
+  let lastInput = performance.now();
+  let softSig = "";
+  let softLeft = 0;
+  const touched = () => {
+    lastInput = performance.now();
+    softLeft = 6;
+  };
+  for (const ev of ["pointerdown", "pointermove", "keydown", "wheel"]) window.addEventListener(ev, touched, { signal, passive: true });
+  const setTier = (next: number) => {
+    tier = next;
+    fx?.setTier(tier);
+    renderer.shadowMap.autoUpdate = tier < 1;
+    renderer.shadowMap.needsUpdate = true;
+    settleUntil = performance.now() + 600;
+    good = 0;
+    layout();
+  };
+  /* judged over about a second of frames, so a single hiccup never costs quality */
+  const govern = (now: number, work: number, half: boolean) => {
+    const gap = (now - prevCall) / (half ? 2 : 1);
+    prevCall = now;
+    if (now < settleUntil || gap > 5000) {
+      winN = winSlow = winGap = 0;
+      winStart = now;
+      return;
+    }
+    winN++;
+    winGap += gap;
+    if (gap > 28 || work > 14) winSlow++;
+    if (now - winStart < 1000 || winN < 3) return;
+    /* very slow frames skip straight to the cheap end */
+    if (winGap / winN > 90 && tier < 3) setTier(3);
+    else if (winSlow > winN * 0.4 && tier < 4) setTier(tier + 1);
+    else if (winSlow === 0 && tier > 0 && !soft && !recovered.has(tier) && ++good >= 3) {
+      /* a few smooth seconds earn one step back up, once, so it never see-saws */
+      recovered.add(tier);
+      setTier(tier - 1);
+    }
+    if (winSlow) good = 0;
+    winN = winSlow = winGap = 0;
+    winStart = now;
+  };
+
   const frame = (now: number) => {
+    const began = performance.now();
     raf = requestAnimationFrame(frame);
+    tick++;
+    const calm = narrow && !playing && !walking && now - lastInput > 6000 && now - t0 > introMs;
+    const half = tier >= 4 || calm;
+    if (half && tick % 2) return;
+    if (soft && !playing && !walking) {
+      const sig = `${currentKey}|${selected}|${hoverId}|${nightGoal}|${panelOpen}|${ptrs.size}|${camera.aspect}`;
+      if (sig !== softSig) {
+        softSig = sig;
+        touched();
+      }
+      if (now - lastInput > 1500 && softLeft <= 0) return;
+      softLeft--;
+    }
+    if (!renderer.shadowMap.autoUpdate && tick % 6 === 0) renderer.shadowMap.needsUpdate = true;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const t = reduceMotion ? 0 : (now - t0) / 1000;
@@ -554,21 +1014,25 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     sunDir.lerpVectors(sunDay, sunNight, n).normalize();
     sun.position.copy(sunDir).multiplyScalar(34);
     sun.color.lerpColors(cSunDay, cSunNight, n);
-    sun.intensity = lerp(2.7, 0.9, n);
+    sun.intensity = lerp(2.3, 0.9, n);
     hemi.color.lerpColors(hSkyDay, hSkyNight, n);
     hemi.groundColor.lerpColors(hGroundDay, hGroundNight, n);
-    hemi.intensity = lerp(1.25, 0.7, n);
+    hemi.intensity = lerp(1.05, 0.7, n);
     fill.intensity = lerp(0.5, 0.25, n);
-    scene.environmentIntensity = lerp(0.55, 0.3, n);
+    scene.environmentIntensity = lerp(0.7, 0.25, n);
     sky.update(n, sunDir, camera.position);
     (scene.fog as THREE.FogExp2).color.copy(sky.fog);
-    (scene.fog as THREE.FogExp2).density = 0.0075 + n * 0.003;
+    (scene.fog as THREE.FogExp2).density = 0.006 + n * 0.0045;
     fx?.setNight(n);
     sea.update(t, n);
 
+    folks.cull(camera.position, 36);
     if (!reduceMotion) {
       folks.update(t, dt);
-      explorer.update(t, dt);
+      hitStop = Math.max(0, hitStop - dt);
+      const hdt = hitStop > 0 ? dt * 0.12 : dt;
+      explorer.update(t, hdt);
+      particles.update(hdt);
       traffic.update(t, dt);
       for (const a of kit.anims) a(t, dt);
     } else {
@@ -578,11 +1042,11 @@ export function createCityScene(opts: CityOptions): CityScene | null {
 
     if (playing) {
       const kd = (a: string, b: string) => keys.has(a) || keys.has(b);
-      const turn = (kd("d", "arrowright") ? 1 : 0) - (kd("a", "arrowleft") ? 1 : 0) + stick.x;
+      const side = (kd("d", "arrowright") ? 1 : 0) - (kd("a", "arrowleft") ? 1 : 0) + stick.x;
       const fwd = (kd("w", "arrowup") ? 1 : 0) - (kd("s", "arrowdown") ? 1 : 0) + stick.y;
       const run = keys.has("shift") || Math.hypot(stick.x, stick.y) > 0.92;
-      if (paused) explorer.setInput(0, 0, false);
-      else explorer.setInput(turn, fwd, run);
+      if (paused) explorer.setInput(0, 0, false, playYaw);
+      else explorer.setInput(side, fwd, run, playYaw);
 
       let best: BuildingId | null = null;
       let bd = Infinity;
@@ -598,19 +1062,65 @@ export function createCityScene(opts: CityOptions): CityScene | null {
         playH?.onNear(best);
       }
 
+      const hy = explorer.py + 0.55;
       for (let i = 0; i < coinPts.length; i++) {
-        if (!coinGot[i] && Math.hypot(explorer.px - coinPts[i][0], explorer.pz - coinPts[i][1]) < 0.7) {
+        const [cx, cy, cz] = coinPts[i];
+        if (!coinGot[i] && Math.hypot(explorer.px - cx, explorer.pz - cz) < 0.7 && Math.abs(hy - cy) < 0.85) {
           coinGot[i] = true;
+          coinAt[i] = t;
           coinTotal += 1;
-          playH?.onCoin(coinTotal, coinPts.length);
+          combo = t - lastCoin < 1.6 ? combo + 1 : 1;
+          lastCoin = t;
+          particles.burst("spark", cx, cy, cz, null, Math.min(2, 0.7 + combo * 0.12));
+          sfx.play("coin", combo - 1);
+          playH?.onCoin(coinTotal, coinPts.length, combo);
         }
-        coinDummy.position.set(coinPts[i][0], 0.62 + Math.sin(t * 3 + i) * 0.07, coinPts[i][1]);
-        coinDummy.rotation.set(0, t * 3 + i, 0);
-        coinDummy.scale.setScalar(coinGot[i] ? 0.0001 : 1);
+        const bob = Math.sin(t * 3 + i) * 0.07;
+        if (coinGot[i]) {
+          const u = (t - coinAt[i]) / 0.35;
+          coinDummy.position.set(cx, cy + bob + Math.min(1, u) * 0.9, cz);
+          coinDummy.rotation.set(0, t * 14, 0);
+          coinDummy.scale.setScalar(u < 1 ? (1 + u * 0.8) * (1 - u) + 0.0001 : 0.0001);
+        } else {
+          coinDummy.position.set(cx, cy + bob, cz);
+          coinDummy.rotation.set(0, t * 3 + i, 0);
+          coinDummy.scale.setScalar(1);
+        }
         coinDummy.updateMatrix();
         coins.setMatrixAt(i, coinDummy.matrix);
       }
       coins.instanceMatrix.needsUpdate = true;
+
+      gems.forEach((g, i) => {
+        if (gemGot[i]) return;
+        const [gx, gy, gz] = gemPts[i];
+        g.position.y = gy + Math.sin(t * 2 + i) * 0.12;
+        g.rotation.y = t * 1.6 + i;
+        const d = Math.hypot(explorer.px - gx, explorer.pz - gz, hy - g.position.y);
+        if (d < 0.8) {
+          gemGot[i] = true;
+          g.visible = false;
+          gemTotal += 1;
+          particles.burst("gem", gx, g.position.y, gz);
+          particles.ring(gx, explorer.py, gz, 2.2, 0x7fd3ff);
+          sfx.play("gem");
+          shake = Math.max(shake, 0.12);
+          playH?.onGem(gemTotal, gemPts.length);
+        }
+      });
+      gemMat.emissiveIntensity = 0.9 + Math.sin(t * 4) * 0.3;
+
+      pads.forEach((p) => {
+        p.kick = Math.max(0, p.kick - dt * 3);
+        p.top.scale.y = 1 - p.kick * 0.6;
+        p.arrows.forEach((a, i) => {
+          const u = (t * 0.9 + i / 3) % 1;
+          a.position.y = 0.25 + u * 1.1;
+          a.scale.setScalar(0.8 + (1 - u) * 0.4);
+          a.rotation.y = t * 1.2;
+        });
+      });
+      padArrowMat.opacity = 0.35 + Math.sin(t * 5) * 0.15;
 
       miniTick += 1;
       if (mini && miniTick % 2 === 0) drawMini();
@@ -622,10 +1132,16 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       island.localToWorld(v);
       goal.t.copy(v);
       if (playing) {
-        goal.yaw += angDiff(goal.yaw, explorer.heading + Math.PI + walkOff);
-        goal.pitch = 0.36;
-        goal.dist = narrow ? 8.2 : 6.2;
-        goal.fov = narrow ? 58 : 46;
+        /* the camera drifts behind him while he moves; dragging orbits it */
+        const sp = explorer.speed;
+        if (ptrs.size === 0 && sp > 0.6 && !paused) {
+          playYaw += angDiff(playYaw, explorer.heading + Math.PI) * Math.min(1, dt * 0.5 * Math.min(1, sp / 4));
+        }
+        const air = Math.max(0, explorer.py);
+        goal.yaw = goal.yaw + angDiff(goal.yaw, playYaw);
+        goal.pitch = playPitch + Math.min(0.35, air * 0.05);
+        goal.dist = (narrow ? 6.9 : 6.6) + sp * 0.32 + Math.min(5, air * 0.7);
+        goal.fov = (narrow ? 58 : 46) + Math.min(8, sp * 1.4);
       } else {
         const dwell = explorer.dwelling;
         const want = explorer.heading + (dwell ? 0.55 : Math.PI) + walkOff;
@@ -635,8 +1151,8 @@ export function createCityScene(opts: CityOptions): CityScene | null {
         goal.fov = narrow ? 56 : 42;
       }
       if (ptrs.size === 0) walkOff *= 1 - Math.min(1, dt * 0.7);
-    } else if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0) goal.yaw += 0.0007;
-    const kk = reduceMotion ? 1 : playing ? 0.12 : walking ? 0.09 : k;
+    } else if (!reduceMotion && !selected && now > idleAt && ptrs.size === 0 && !soft) goal.yaw += dt * 0.042;
+    const kk = reduceMotion ? 1 : 1 - Math.pow(1 - (playing ? 0.12 : walking ? 0.09 : k), dt * 60);
     cam.yaw += (goal.yaw - cam.yaw) * kk;
     cam.pitch += (goal.pitch - cam.pitch) * kk;
     cam.dist += (goal.dist - cam.dist) * kk;
@@ -656,6 +1172,12 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       cam.t.z + Math.cos(yaw) * cp * dist,
     );
     camera.lookAt(cam.t);
+    if (shake > 0.001) {
+      camera.position.x += (Math.random() - 0.5) * shake;
+      camera.position.y += (Math.random() - 0.5) * shake;
+      camera.position.z += (Math.random() - 0.5) * shake;
+      shake *= Math.max(0, 1 - dt * 7);
+    }
     if (!narrow && Math.abs(offGoal - offX) > 0.3) {
       offX += (offGoal - offX) * 0.1;
       camera.setViewOffset(window.innerWidth, window.innerHeight, offX, 0, window.innerWidth, window.innerHeight);
@@ -665,7 +1187,6 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       camera.updateProjectionMatrix();
     }
 
-    island.position.y = Math.sin(t * 0.8) * 0.05;
     ids.forEach((id) => {
       const target = id === selected ? 1.05 : id === hoverId ? 1.03 : 1;
       const g = byId[id];
@@ -694,10 +1215,61 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       island.localToWorld(v);
       v.project(camera);
       const x = (v.x * 0.5 + 0.5) * w;
-      const y = (-v.y * 0.5 + 0.5) * h;
+      /* keep the label below the top bar, where the tallest tower would otherwise hide it */
+      const sy = (-v.y * 0.5 + 0.5) * h;
+      const y = !narrow && sy > -80 && sy < 128 ? 128 : sy;
       el.style.transform = `translate3d(${Math.round(x)}px,${Math.round(y - 6)}px,0) translate(-50%,-100%)`;
     });
+    govern(now, performance.now() - began, half);
   };
+  /* compile every shader up front, a few objects at a time and without waiting on the graphics card,
+     instead of all at once inside the first frame */
+  /* the post effects draw the scene into an off-screen target, which needs its own shader variants */
+  const warmTarget = fx ? new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }) : null;
+  renderer.setRenderTarget(warmTarget);
+  try {
+    for (const group of [...island.children, ...scene.children]) {
+      if (group === island) continue;
+      renderer.compile(group, camera, scene);
+      await pause();
+    }
+    await renderer.compileAsync(scene, camera);
+    /* reading each program's uniforms is the other slow part of a first frame */
+    for (const prog of renderer.info.programs ?? []) {
+      (prog as unknown as { getUniforms: () => unknown }).getUniforms();
+      await pause();
+    }
+  } catch {
+    /* older browsers compile on first use */
+  }
+  renderer.setRenderTarget(null);
+  warmTarget?.dispose();
+  await fx?.warm(pause);
+  /* and upload the textures a few at a time, instead of all of them inside the first frame */
+  const textures = new Set<THREE.Texture>();
+  scene.traverse((o) => {
+    const mats = (o as THREE.Mesh).material;
+    if (!mats) return;
+    for (const m of Array.isArray(mats) ? mats : [mats]) {
+      for (const v of Object.values(m)) if (v instanceof THREE.Texture) textures.add(v);
+    }
+  });
+  for (const tex of textures) {
+    renderer.initTexture(tex);
+    await pause();
+  }
+  if (soft) {
+    setTier(4);
+    /* no fly-in: start on the finished view */
+    cam.yaw = goal.yaw;
+    cam.pitch = goal.pitch;
+    cam.dist = goal.dist;
+    cam.fov = goal.fov;
+    cam.t.copy(goal.t);
+  }
+  touched();
+  /* the first frames still warm up the post effects, so judge from a moment later */
+  settleUntil = performance.now() + 1500;
   raf = requestAnimationFrame(frame);
 
   const api: CityScene = {
@@ -742,6 +1314,8 @@ export function createCityScene(opts: CityOptions): CityScene | null {
     dispose: () => {
       cancelAnimationFrame(raf);
       explorer.dispose();
+      particles.dispose();
+      sfx.dispose();
       abort.abort();
       const seen = new Set<THREE.Texture>();
       scene.traverse((obj) => {
@@ -771,9 +1345,15 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       if (reduceMotion) return false;
       api.stopWalk();
       playH = h;
+      sfx.unlock();
       coinGot.fill(false);
       coinTotal = 0;
+      combo = 0;
       coins.visible = true;
+      gemGot.fill(false);
+      gemTotal = 0;
+      gems.forEach((g) => (g.visible = true));
+      padGroup.visible = true;
       playing = true;
       paused = false;
       nearId = null;
@@ -782,7 +1362,10 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       fx?.setLite(true);
       layout();
       explorer.startFree(-1.5, 1.4, Math.PI / 2);
-      h.onCoin(0, coinPts.length);
+      playYaw = -Math.PI / 2;
+      playPitch = 0.34;
+      h.onCoin(0, coinPts.length, 0);
+      h.onGem(0, gemPts.length);
       return true;
     },
     stopPlay: () => {
@@ -790,8 +1373,10 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       playing = false;
       lite = false;
       explorer.stop();
-      explorer.setInput(0, 0, false);
+      explorer.setInput(0, 0, false, 0);
       coins.visible = false;
+      gems.forEach((g) => (g.visible = false));
+      padGroup.visible = false;
       nearId = null;
       keys.clear();
       stick.x = 0;
@@ -811,8 +1396,19 @@ export function createCityScene(opts: CityOptions): CityScene | null {
       stick.x = Math.max(-1, Math.min(1, x));
       stick.y = Math.max(-1, Math.min(1, y));
     },
-    jump: () => {
-      if (playing && !paused) explorer.jump();
+    setJump: (down) => {
+      if (!playing) return;
+      sfx.unlock();
+      explorer.setJump(down && !paused);
+    },
+    dash: () => {
+      if (playing && !paused) explorer.dash();
+    },
+    emote: (e) => {
+      if (playing && !paused) explorer.setEmote(e);
+    },
+    setMuted: (m) => {
+      sfx.muted = m;
     },
     setVisited: (ids) => {
       visitedSet = new Set(ids);

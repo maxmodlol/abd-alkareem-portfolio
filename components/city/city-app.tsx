@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { jobs, person, skills } from "@/lib/content";
 import { projects, type Project } from "@/lib/projects";
 
-import { createCityScene, type BuildingId, type CityScene } from "./city-scene";
+import type { BuildingId, CityScene } from "./city-scene";
 
 function Stick({ onMove }: { onMove: (x: number, y: number) => void }) {
   const knob = useRef<HTMLDivElement>(null);
@@ -73,16 +73,35 @@ const tabs: { id: Tab; desktop: string; mobile: string }[] = [
   { id: "contact", desktop: "Contact", mobile: "Contact" },
 ];
 
+/** True when WebGL runs on the processor instead of a graphics card. */
+function softwareGl(): boolean {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl");
+    if (!gl) return false;
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return /swiftshader|llvmpipe|software|basic render/i.test(name);
+  } catch {
+    return false;
+  }
+}
+
 export function CityApp() {
   const [view, setView] = useState<View>("home");
   const [selected, setSelected] = useState<BuildingId | null>(null);
   const [copied, setCopied] = useState(false);
   const [glOk, setGlOk] = useState(true);
+  /* bumps once the 3D scene has loaded, so settings chosen before then are applied to it */
+  const [sceneReady, setSceneReady] = useState(0);
   const [night, setNight] = useState(false);
   const [touring, setTouring] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [near, setNear] = useState<BuildingId | null>(null);
   const [coins, setCoins] = useState({ n: 0, total: 0 });
+  const [gems, setGems] = useState({ n: 0, total: 0 });
+  const [combo, setCombo] = useState({ n: 0, key: 0 });
+  const [muted, setMuted] = useState(false);
   const [visited, setVisited] = useState<BuildingId[]>([]);
   const [winSeen, setWinSeen] = useState(false);
   const miniRef = useRef<HTMLCanvasElement>(null);
@@ -151,7 +170,11 @@ export function CityApp() {
     const ok = sceneRef.current?.startPlay({
       onNear: setNear,
       onInteract: (id) => choose(id),
-      onCoin: (n, total) => setCoins({ n, total }),
+      onCoin: (n, total, c) => {
+        setCoins({ n, total });
+        if (c >= 2) setCombo({ n: c, key: n });
+      },
+      onGem: (n, total) => setGems({ n, total }),
     });
     if (!ok) return;
     setVisited([]);
@@ -181,16 +204,40 @@ export function CityApp() {
 
   useEffect(() => () => window.clearInterval(tourTimer.current), []);
   useEffect(() => {
-    sceneRef.current?.setNight(night ? 1 : 0.22);
-  }, [night]);
+    try {
+      setMuted(window.localStorage.getItem("city-muted") === "1");
+    } catch {
+      /* storage is optional */
+    }
+  }, []);
+  useEffect(() => {
+    sceneRef.current?.setMuted(muted);
+  }, [muted, sceneReady]);
+  /* Esc leaves a building or closes a panel; in the game it drops you back on the street */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (view !== "home") {
+        e.preventDefault();
+        goHome();
+      } else if (touring) {
+        stopTour();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view, touring, goHome, stopTour]);
+  useEffect(() => {
+    sceneRef.current?.setNight(night ? 1 : 0);
+  }, [night, sceneReady]);
   useEffect(() => {
     sceneRef.current?.setPanelOpen(view !== "home");
     sceneRef.current?.setPaused(playing && view !== "home");
     sceneRef.current?.setMinimap(playing && view === "home" ? miniRef.current : null);
-  }, [view, playing]);
+  }, [view, playing, sceneReady]);
   useEffect(() => {
     sceneRef.current?.setVisited(visited);
-  }, [visited]);
+  }, [visited, sceneReady]);
   useEffect(() => {
     if (!playing || !selected) return;
     setVisited((v) => (v.includes(selected) ? v : [...v, selected]));
@@ -210,39 +257,88 @@ export function CityApp() {
     }, 700);
   }, []);
 
-  /* Create and tear down the 3D scene. */
+  /* Create and tear down the 3D scene. three.js loads as its own chunk after the page is up,
+     so the text and controls paint first and the island fades in when it is ready. */
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const scene = createCityScene({
-      canvas,
-      tagEls: tagRefs.current,
-      getMetrics: () => ({
-        narrow: window.innerWidth < 760,
-        topH: topRef.current?.getBoundingClientRect().bottom ?? 0,
-        deckTop: deckRef.current?.getBoundingClientRect().top ?? window.innerHeight,
-      }),
-      onPick: (id) => pickManual(id),
-      reduceMotion: reduce,
+    let cancelled = false;
+    let teardown: (() => void) | null = null;
+    /* The picture of the island is the first view. The live island is fetched once the page is idle and
+       built on the first sign of a visitor (a move, tap, scroll or key), or after a few quiet seconds, so
+       none of its work lands while the page is loading. Without a graphics card it waits for a real touch. */
+    const loaded = new Promise<void>((r) => {
+      const go = () => ("requestIdleCallback" in window ? window.requestIdleCallback(() => r(), { timeout: 1500 }) : setTimeout(r, 200));
+      if (document.readyState === "complete") go();
+      else window.addEventListener("load", go, { once: true });
     });
-    sceneRef.current = scene;
-    if (!scene) {
-      setGlOk(false);
-      return;
-    }
-    let observer: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined" && deckRef.current) {
-      observer = new ResizeObserver(() => scene.relayout());
-      observer.observe(deckRef.current);
-    }
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => scene.relayout()).catch(() => undefined);
-    }
+    const code = loaded.then(() => import("./city-scene"));
+    const intent = loaded.then(
+      () =>
+        new Promise<void>((r) => {
+          const soft = softwareGl();
+          const evs = soft
+            ? (["pointerdown", "keydown", "wheel", "touchstart"] as const)
+            : (["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const);
+          let timer = 0;
+          const wake = () => {
+            evs.forEach((e) => window.removeEventListener(e, wake, true));
+            window.clearTimeout(timer);
+            r();
+          };
+          evs.forEach((e) => window.addEventListener(e, wake, { passive: true, capture: true }));
+          if (!soft) timer = window.setTimeout(wake, 6000);
+        }),
+    );
+    const idle = Promise.all([code, intent]).then(([mod]) => mod);
+    idle
+      .then(async ({ createCityScene }) => {
+        if (cancelled) return;
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const scene = await createCityScene({
+          canvas,
+          tagEls: tagRefs.current,
+          getMetrics: () => ({
+            narrow: window.innerWidth < 760,
+            topH: topRef.current?.getBoundingClientRect().bottom ?? 0,
+            deckTop: deckRef.current?.getBoundingClientRect().top ?? window.innerHeight,
+          }),
+          onPick: (id) => pickManual(id),
+          reduceMotion: reduce,
+        });
+        if (cancelled) {
+          scene?.dispose();
+          return;
+        }
+        sceneRef.current = scene;
+        if (!scene) {
+          setGlOk(false);
+          return;
+        }
+        scene.select(selectedRef.current);
+        scene.focus(selectedRef.current ?? "home");
+        setSceneReady((n) => n + 1);
+        requestAnimationFrame(() => requestAnimationFrame(() => canvas.classList.add("on")));
+        let observer: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== "undefined" && deckRef.current) {
+          observer = new ResizeObserver(() => scene.relayout());
+          observer.observe(deckRef.current);
+        }
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => scene.relayout()).catch(() => undefined);
+        }
+        teardown = () => {
+          observer?.disconnect();
+          scene.dispose();
+          sceneRef.current = null;
+        };
+      })
+      .catch(() => {
+        if (!cancelled) setGlOk(false);
+      });
     return () => {
-      observer?.disconnect();
-      scene.dispose();
-      sceneRef.current = null;
+      cancelled = true;
+      teardown?.();
     };
   }, [pickManual]);
 
@@ -309,6 +405,12 @@ export function CityApp() {
 
   return (
     <div className={`city${playing ? " playing" : ""}${selected ? " sel" : ""}`} data-gl={glOk ? "on" : "off"}>
+      {/* a picture of the island shows at once and stays as the fallback; the live island fades in over it */}
+      <picture className="poster">
+        <source media="(max-width: 759px)" srcSet="/island-tall.webp" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/island-wide.webp" alt="" fetchPriority="high" decoding="async" />
+      </picture>
       <canvas ref={canvasRef} id="scene" aria-hidden="true" />
       <div className="bars" aria-hidden="true" />
       <div className="intro" aria-hidden="true">
@@ -345,23 +447,80 @@ export function CityApp() {
             <div className="hud-bar">
               <i style={{ width: `${(visited.length / projects.length) * 100}%` }} />
             </div>
-            <div className="hud-coins" key={coins.n}>
-              <span className="coin" />
-              {coins.n}
-              <small>/ {coins.total}</small>
+            <div className="hud-row">
+              <div className="hud-coins" key={coins.n}>
+                <span className="coin" />
+                {coins.n}
+                <small>/ {coins.total}</small>
+              </div>
+              <div className="hud-coins hud-gems" key={`g${gems.n}`}>
+                <span className="gem" />
+                {gems.n}
+                <small>/ {gems.total}</small>
+              </div>
+              <button
+                className="hud-mute"
+                type="button"
+                aria-pressed={muted}
+                aria-label={muted ? "Turn sound on" : "Turn sound off"}
+                onClick={() => {
+                  const m = !muted;
+                  setMuted(m);
+                  try {
+                    window.localStorage.setItem("city-muted", m ? "1" : "0");
+                  } catch {
+                    /* storage is optional */
+                  }
+                }}
+              >
+                {muted ? "Sound off" : "Sound on"}
+              </button>
             </div>
           </div>
+          {combo.n >= 2 ? (
+            <div className="hud-combo" key={combo.key} aria-hidden="true">
+              x{combo.n} combo
+            </div>
+          ) : null}
           <canvas ref={miniRef} className="hud-mini" width={300} height={300} aria-hidden="true" />
           {near ? (
             <button className="hud-act" type="button" onClick={() => choose(near)}>
               Enter {projects.find((p) => p.id === near)?.name} <kbd>E</kbd>
             </button>
           ) : null}
-          <p className="hud-help">WASD or arrows to move · Shift to run · Space to jump · E to enter · coins are everywhere</p>
+          <p className="hud-help">
+            <kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump, twice to flip, hold to glide ·{" "}
+            <kbd>Q</kbd> dash · <kbd>1</kbd> wave · <kbd>2</kbd> dance · <kbd>E</kbd> enter · drag to look around ·
+            orange pads launch you to the gems and rooftops
+          </p>
           <Stick onMove={(x, y) => sceneRef.current?.setStick(x, y)} />
-          <button className="hud-jump" type="button" onPointerDown={() => sceneRef.current?.jump()}>
+          <button
+            className="hud-jump"
+            type="button"
+            onPointerDown={(e) => {
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                /* optional */
+              }
+              sceneRef.current?.setJump(true);
+            }}
+            onPointerUp={() => sceneRef.current?.setJump(false)}
+            onPointerCancel={() => sceneRef.current?.setJump(false)}
+          >
             Jump
           </button>
+          <button className="hud-dash" type="button" onPointerDown={() => sceneRef.current?.dash()}>
+            Dash
+          </button>
+          <div className="hud-emotes">
+            <button type="button" onClick={() => sceneRef.current?.emote("wave")}>
+              Wave
+            </button>
+            <button type="button" onClick={() => sceneRef.current?.emote("dance")}>
+              Dance
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -377,7 +536,8 @@ export function CityApp() {
           </div>
           <h2>City explored!</h2>
           <p>
-            You visited all {projects.length} projects and collected {coins.n} of {coins.total} coins.
+            You visited all {projects.length} projects, collected {coins.n} of {coins.total} coins and found {gems.n} of{" "}
+            {gems.total} gems.
           </p>
           <div className="row">
             <button
@@ -397,6 +557,12 @@ export function CityApp() {
         </div>
       ) : null}
 
+      {playing && view !== "home" ? (
+        <button className={`hud-back${sheetOpen ? " sheet" : ""}`} type="button" onClick={() => goHome()}>
+          Back to the game <kbd>Esc</kbd>
+        </button>
+      ) : null}
+
       <div className="mtop" ref={topRef}>
         <div className="brand">{person.name}</div>
         <div className="mstat">
@@ -411,7 +577,7 @@ export function CityApp() {
             {playing ? "Exit" : "Play"}
           </button>
           <button type="button" aria-pressed={night} aria-label="Toggle night" onClick={() => setNight((v) => !v)}>
-            {night ? "Dusk" : "Night"}
+            {night ? "Day" : "Night"}
           </button>
         </div>
       </div>
@@ -433,7 +599,7 @@ export function CityApp() {
             {playing ? "Exit game" : "Play game"}
           </button>
           <button type="button" aria-pressed={night} onClick={() => setNight((v) => !v)}>
-            {night ? "Dusk" : "Night"}
+            {night ? "Day" : "Night"}
           </button>
         </div>
       </header>
@@ -496,7 +662,7 @@ export function CityApp() {
                 {playing ? "Exit game" : "Play the city"}
               </button>
               <button className="pill alt" type="button" aria-pressed={night} onClick={() => setNight((v) => !v)}>
-                {night ? "Switch to dusk" : "Switch to night"}
+                {night ? "Switch to day" : "Switch to night"}
               </button>
             </div>
             <p className="hint">Drag to turn the island. Click a building or tag to fly in.</p>
@@ -590,6 +756,14 @@ export function CityApp() {
         >
           <h2>Products are cities. I build the plumbing.</h2>
           <p>Swipe to visit each building, or tap one on the island. Drag to look around.</p>
+          <div className="row">
+            <button className="pill" type="button" onClick={playing ? stopPlay : startPlay}>
+              {playing ? "Exit game" : "Play the city"}
+            </button>
+            <button className="pill alt" type="button" onClick={touring ? stopTour : startTour}>
+              {touring ? "Stop tour" : "Guided tour"}
+            </button>
+          </div>
         </div>
         {projects.map((p, i) => (
           <div

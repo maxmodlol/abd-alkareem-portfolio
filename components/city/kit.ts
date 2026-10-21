@@ -56,7 +56,7 @@ export class Kit {
   readonly anims: Anim[] = [];
   readonly hits: THREE.Mesh[] = [];
   readonly boxGeo = new THREE.BoxGeometry(1, 1, 1);
-  /** 0 = golden hour, 1 = night. Updated by the scene every frame. */
+  /** 0 = noon, 1 = night. Updated by the scene every frame. */
   night = 0;
   /** Point lights are skipped on small screens to keep the frame rate up. */
   lightsOn = true;
@@ -218,9 +218,45 @@ export class Kit {
           g.fillRect(x + cw / 2 - 0.75, y + 5, 1.5, ch - 10);
           g.fillStyle = "rgba(0,0,0,0.16)";
           g.fillRect(x + 4, y + ch - 5, cw - 8, 2);
+          /* a sill under each window and a soft reflection streak across the glass */
+          g.fillStyle = "rgba(255,255,255,0.35)";
+          g.fillRect(x + 3, y + ch - 4, cw - 6, 1.5);
+          g.fillStyle = "rgba(255,255,255,0.12)";
+          g.beginPath();
+          g.moveTo(x + 5, y + ch - 12);
+          g.lineTo(x + 5, y + ch - 7);
+          g.lineTo(x + cw - 5, y + 9);
+          g.lineTo(x + cw - 5, y + 5);
+          g.closePath();
+          g.fill();
         }
       }
+      /* weathering: grime collects towards the ground, with a little streaking */
+      const grime = g.createLinearGradient(0, 0, 0, H);
+      grime.addColorStop(0, "rgba(40,30,20,0)");
+      grime.addColorStop(0.75, "rgba(40,30,20,0.04)");
+      grime.addColorStop(1, "rgba(40,30,20,0.16)");
+      g.fillStyle = grime;
+      g.fillRect(0, 0, W, H);
+      for (let i = 0; i < o.cols * 2; i++) {
+        g.fillStyle = `rgba(30,25,20,${0.02 + R() * 0.04})`;
+        g.fillRect(R() * W, R() * H * 0.5, 1 + R() * 2, H * (0.2 + R() * 0.5));
+      }
     });
+    /* glass is smooth and a little metallic so it mirrors the sky; walls are matte (G roughness, B metalness) */
+    const rm = canvasTex(
+      W,
+      H,
+      (g) => {
+        g.fillStyle = "rgb(0,225,0)";
+        g.fillRect(0, 0, W, H);
+        g.fillStyle = "rgb(0,30,170)";
+        for (let r = 0; r < o.rows; r++) {
+          for (let c = 0; c < o.cols; c++) g.fillRect(c * cw + 5, r * ch + 5, cw - 10, ch - 10);
+        }
+      },
+      false,
+    );
     const emissive = canvasTex(W, H, (g) => {
       g.fillStyle = "#000";
       g.fillRect(0, 0, W, H);
@@ -240,8 +276,11 @@ export class Kit {
       emissiveMap: emissive,
       emissive: 0xffffff,
       emissiveIntensity: day,
-      roughness: o.rough ?? 0.55,
-      metalness: o.metal ?? 0.1,
+      roughness: 1,
+      metalness: 1,
+      roughnessMap: rm,
+      metalnessMap: rm,
+      envMapIntensity: 1.3,
     });
     this.glows.push({ m, day, night });
     return m;

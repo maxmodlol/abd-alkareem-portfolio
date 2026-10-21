@@ -1,20 +1,23 @@
 import * as THREE from "three";
 
 import { canvasTex, rng, type Kit } from "./kit";
+import { leafBlob, windify } from "./nature";
+import { Sky as PhysicalSky } from "three/examples/jsm/objects/Sky.js";
+import { asphaltMaps, pavingMaps, rippleNormal, worldUV } from "./textures";
+import { ISLETS, SEA_Y, SHORE_GLSL, type Palms } from "./coast";
 import type { Folks } from "./people";
 import type { Traffic } from "./traffic";
 
-export const SEA_Y = -2.4;
-export const ISLE = 11.5;
+export { SEA_Y };
 
 /* ------------------------------------------------------------------ */
 /* Sky                                                                                             */
 /* ------------------------------------------------------------------ */
 const SKY_DAY = {
-  top: new THREE.Color(0x3b5fa8),
-  mid: new THREE.Color(0xe58a7c),
-  hor: new THREE.Color(0xffb36b),
-  sun: new THREE.Color(0xffc98a),
+  top: new THREE.Color(0x2d7fe0),
+  mid: new THREE.Color(0x76bdf2),
+  hor: new THREE.Color(0xbfe4fa),
+  sun: new THREE.Color(0xfff3dc),
 };
 const SKY_NIGHT = {
   top: new THREE.Color(0x040818),
@@ -67,12 +70,40 @@ export type Sky = {
   update: (night: number, sunDir: THREE.Vector3, cam: THREE.Vector3) => void;
 };
 
+/** The Preetham daylight model on a clear day. alpha fades it into the stylised sky. */
+export function createPhysicalSky(): { mesh: PhysicalSky; set: (sunDir: THREE.Vector3, alpha: number) => void } {
+  const mesh = new PhysicalSky();
+  const m = mesh.material as THREE.ShaderMaterial;
+  m.uniforms.uAlpha = { value: 1 };
+  m.uniforms.uGain = { value: 0.62 };
+  m.fragmentShader = m.fragmentShader
+    .replace("uniform vec3 up;", "uniform vec3 up;\nuniform float uAlpha;\nuniform float uGain;")
+    .replace("gl_FragColor = vec4( retColor, 1.0 );", "gl_FragColor = vec4( retColor * uGain, uAlpha );");
+  m.transparent = true;
+  m.uniforms.turbidity.value = 2.4;
+  m.uniforms.rayleigh.value = 1.3;
+  m.uniforms.mieCoefficient.value = 0.004;
+  m.uniforms.mieDirectionalG.value = 0.86;
+  mesh.scale.setScalar(440);
+  mesh.frustumCulled = false;
+  return {
+    mesh,
+    set(sunDir, alpha) {
+      (m.uniforms.sunPosition.value as THREE.Vector3).copy(sunDir);
+      m.uniforms.uAlpha.value = alpha;
+    },
+  };
+}
+
 export function makeSky(scene: THREE.Scene): Sky {
   const mat = createSkyMaterial();
   const dome = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), mat);
   dome.renderOrder = -10;
   dome.frustumCulled = false;
   scene.add(dome);
+  const phys = createPhysicalSky();
+  phys.mesh.renderOrder = -9;
+  scene.add(phys.mesh);
 
   const R = rng(99);
   const n = 1100;
@@ -111,6 +142,9 @@ export function makeSky(scene: THREE.Scene): Sky {
       u.uSunPower.value = 1 - night * 0.55;
       fog.copy(u.uHor.value as THREE.Color);
       dome.position.copy(cam);
+      phys.mesh.position.copy(cam);
+      /* a light layer of real scattering over the clean game-sky gradient */
+      phys.set(sunDir, Math.max(0, 0.35 - night * 0.6));
       stars.position.copy(cam);
       starMat.opacity = Math.max(0, night * 1.2 - 0.25);
     },
@@ -122,208 +156,114 @@ export function makeSky(scene: THREE.Scene): Sky {
 /* ------------------------------------------------------------------ */
 export type Sea = { update: (t: number, night: number) => void };
 
-export function makeSea(scene: THREE.Scene, island: THREE.Group): Sea {
-  const size = 260;
-  const seg = 150;
+/**
+ * A stylised tropical sea: turquoise over the sand, deep blue further out, with foam that hugs every
+ * shoreline and rolls in as broken bands. The shore distance is computed per pixel from the same
+ * formula that shapes the beaches, so the two always meet.
+ */
+export function makeSea(scene: THREE.Scene): Sea {
+  const size = 340;
+  const seg = 170;
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const base = Float32Array.from(pos.array as ArrayLike<number>);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x2a8f9a, roughness: 0.22, metalness: 0.18, flatShading: true });
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x061a2c,
+    roughness: 0.22,
+    metalness: 0,
+    normalMap: rippleNormal(70),
+    normalScale: new THREE.Vector2(0.28, 0.28),
+    envMapIntensity: 0.3,
+  });
+  const seaU = {
+    uTime: { value: 0 },
+    uNight: { value: 0 },
+    uIslets: { value: ISLETS.map(([x, z, r]) => new THREE.Vector3(x, z, r)) },
+  };
+  const head = `
+    uniform float uTime; uniform float uNight; uniform vec3 uIslets[${ISLETS.length}];
+    varying float vWave;
+    varying vec2 vSeaP;
+    ${SHORE_GLSL}`;
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, seaU);
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", `#include <common>\n${head}`)
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        float wx = position.x; float wz = position.z;
+        float calm = smoothstep(0.0, 6.0, shoreDist(position.xz));
+        float h = (sin(wx * 0.35 + uTime * 0.9) * 0.08 + cos(wz * 0.3 + uTime * 0.7) * 0.07
+          + sin((wx + wz) * 0.2 + uTime * 0.5) * 0.09) * calm;
+        transformed.y += h;
+        vWave = h;
+        vSeaP = position.xz;`,
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        ${head}
+        float seaFoam = 0.0;
+        float sHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float sNoise(vec2 p) {
+          vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(sHash(i), sHash(i + vec2(1.0, 0.0)), f.x), mix(sHash(i + vec2(0.0, 1.0)), sHash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }`,
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        float d = shoreDist(vSeaP);
+        float n1 = sNoise(vSeaP * 1.6 + vec2(uTime * 0.18, -uTime * 0.12));
+        float n2 = sNoise(vSeaP * 0.3 - vec2(uTime * 0.04));
+        vec3 water = mix(vec3(0.1, 0.8, 0.78), vec3(0.03, 0.66, 0.86), smoothstep(0.1, 3.8, d + (n2 - 0.5) * 1.4));
+        water = mix(water, vec3(0.02, 0.45, 0.8), smoothstep(3.0, 12.0, d));
+        water = mix(water, vec3(0.02, 0.33, 0.68), smoothstep(18.0, 70.0, d));
+        water = mix(water, vec3(0.8, 0.97, 0.97), smoothstep(0.08, 0.22, vWave) * 0.3);
+        float edge = 1.0 - smoothstep(0.04, 0.22 + n1 * 0.3, d);
+        float band = smoothstep(0.6, 0.92, sin(d * 3.3 - uTime * 1.3 + n2 * 5.0) * 0.5 + 0.5)
+          * (1.0 - smoothstep(0.4, 2.6, d)) * smoothstep(0.3, 0.6, n1);
+        seaFoam = clamp(max(edge, band * 0.75), 0.0, 1.0);
+        vec3 dayCol = mix(water, vec3(0.98, 1.0, 1.0), seaFoam);
+        diffuseColor.rgb = mix(dayCol, diffuseColor.rgb * (1.0 + seaFoam * 1.5), uNight);`,
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.95, seaFoam);`,
+      )
+      .replace(
+        "#include <normal_fragment_maps>",
+        `vec2 r1 = vNormalMapUv + vec2(uTime * 0.021, uTime * 0.013);
+        vec2 r2 = vNormalMapUv * 2.3 - vec2(uTime * 0.017, -uTime * 0.026);
+        vec3 n1m = texture2D(normalMap, r1).xyz * 2.0 - 1.0;
+        vec3 n2m = texture2D(normalMap, r2).xyz * 2.0 - 1.0;
+        vec3 mapN = normalize(vec3(n1m.xy + n2m.xy, n1m.z * n2m.z));
+        mapN.xy *= normalScale * (1.0 - seaFoam) * (1.0 - smoothstep(30.0, 110.0, length(vSeaP)) * 0.7);
+        normal = normalize(tbn * mapN);`,
+      );
+  };
+  mat.customProgramCacheKey = () => "tropical-sea";
   const sea = new THREE.Mesh(geo, mat);
   sea.position.y = SEA_Y;
+  sea.receiveShadow = true;
   scene.add(sea);
 
-  /* foam where the cliffs meet the water */
-  const foamTex = canvasTex(256, 256, (g, w, h) => {
-    const c = w / 2;
-    const gr = g.createRadialGradient(c, h / 2, 0, c, h / 2, c);
-    gr.addColorStop(0.7, "rgba(255,255,255,0)");
-    gr.addColorStop(0.77, "rgba(255,255,255,0.9)");
-    gr.addColorStop(0.88, "rgba(255,255,255,0.22)");
-    gr.addColorStop(1, "rgba(255,255,255,0)");
-    g.fillStyle = gr;
-    g.fillRect(0, 0, w, h);
-  });
-  const foamMat = new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, opacity: 0.55, depthWrite: false });
-  const foam = new THREE.Mesh(new THREE.RingGeometry(9.6, 14.2, 72), foamMat);
-  foam.rotation.x = -Math.PI / 2;
-  foam.position.y = SEA_Y + 0.06;
-  scene.add(foam);
-  void island;
-
-  const dayC = new THREE.Color(0x2a8f9a);
-  const nightC = new THREE.Color(0x07243a);
   return {
     update(t, night) {
-      const arr = pos.array as Float32Array;
-      for (let i = 0; i < pos.count; i++) {
-        const x = base[i * 3];
-        const z = base[i * 3 + 2];
-        arr[i * 3 + 1] = Math.sin(x * 0.35 + t * 0.9) * 0.1 + Math.cos(z * 0.3 + t * 0.7) * 0.09 + Math.sin((x + z) * 0.2 + t * 0.5) * 0.12;
-      }
-      pos.needsUpdate = true;
-      mat.color.lerpColors(dayC, nightC, night);
-      foam.scale.setScalar(1 + Math.sin(t * 0.8) * 0.012);
-      foamMat.opacity = 0.3 - night * 0.1;
+      seaU.uTime.value = t;
+      seaU.uNight.value = night;
     },
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* Island body: grass, cliffs, rocks, waterfalls, tunnel mouths                                    */
-/* ------------------------------------------------------------------ */
-export function makeIsland(kit: Kit, island: THREE.Group): void {
-  const grass = canvasTex(512, 512, (g, w, h) => {
-    g.fillStyle = "#6bb56a";
-    g.fillRect(0, 0, w, h);
-    const r = rng(5);
-    for (let i = 0; i < 1100; i++) {
-      g.fillStyle = r() < 0.5 ? "rgba(84,166,96,0.32)" : "rgba(128,204,112,0.28)";
-      g.beginPath();
-      g.arc(r() * w, r() * h, 5 + r() * 24, 0, Math.PI * 2);
-      g.fill();
-    }
-  });
-  const soil = kit.mat(0x7a5a42, 1, 0, true);
-  const top = new THREE.MeshStandardMaterial({ map: grass, roughness: 0.95 });
-  kit.put(island, new THREE.CylinderGeometry(ISLE, ISLE, 0.5, 72), [soil, top, soil], 0, -0.25, 0, true);
-
-  /* faceted cliffs, vertex-coloured from soil down to wet stone */
-  const rs = 60;
-  const hs = 8;
-  const cg = new THREE.CylinderGeometry(ISLE - 0.05, 9.4, 3.9, rs, hs, true);
-  const cp = cg.attributes.position as THREE.BufferAttribute;
-  const colors = new Float32Array(cp.count * 3);
-  const R = rng(3);
-  const falls = [0.62, 3.76];
-  const table: number[][] = [];
-  for (let iy = 0; iy <= hs; iy++) {
-    const row: number[] = [];
-    for (let ix = 0; ix < rs; ix++) row.push(R());
-    table.push(row);
-  }
-  const cSoil = new THREE.Color(0x7a5a42);
-  const cTan = new THREE.Color(0xc08a5e);
-  const cWet = new THREE.Color(0x5e4f52);
-  const tmp = new THREE.Color();
-  for (let iy = 0; iy <= hs; iy++) {
-    for (let ix = 0; ix <= rs; ix++) {
-      const i = iy * (rs + 1) + ix;
-      const k = ix % rs;
-      const ang = (k / rs) * Math.PI * 2;
-      const nearFall = falls.some((a) => Math.abs(Math.atan2(Math.sin(ang - a), Math.cos(ang - a))) < 0.2);
-      const j = table[iy][k] - 0.5;
-      const amp = iy === 0 || nearFall ? 0 : iy < 3 ? 0.07 : 0.16;
-      const f = 1 + j * amp;
-      cp.setXYZ(i, cp.getX(i) * f, cp.getY(i) + (iy === 0 || nearFall ? 0 : j * 0.22), cp.getZ(i) * f);
-      const u = iy / hs;
-      tmp.lerpColors(cSoil, cTan, Math.min(1, u * 2.8));
-      if (u > 0.55) tmp.lerp(cWet, (u - 0.55) * 1.8);
-      tmp.toArray(colors, i * 3);
-    }
-  }
-  cg.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  cg.computeVertexNormals();
-  const cliff = new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
-  cliff.position.y = -1.97;
-  cliff.castShadow = true;
-  cliff.receiveShadow = true;
-  island.add(cliff);
-
-  /* boulders at the waterline */
-  const rockMat = kit.mat(0x8a7a6a, 1, 0, true);
-  const rr = rng(8);
-  for (let i = 0; i < 14; i++) {
-    const a = rr() * Math.PI * 2;
-    const rad = 10.1 + rr() * 2.6;
-    const s = 0.35 + rr() * 0.9;
-    const m = kit.put(island, new THREE.DodecahedronGeometry(s, 0), rockMat, Math.cos(a) * rad, SEA_Y + s * 0.2, Math.sin(a) * rad);
-    m.rotation.set(rr() * 3, rr() * 3, rr() * 3);
-  }
-
-  /* rim shrubs */
-  const shrubGeo = new THREE.IcosahedronGeometry(1, 0);
-  const greens = [0x3faf6e, 0x58c985, 0x2f9a60];
-  for (let i = 0; i < 72; i++) {
-    const a = (i / 72) * Math.PI * 2;
-    const near = [0, Math.PI / 2, Math.PI, Math.PI * 1.5].some((q) => Math.abs(Math.atan2(Math.sin(a - q), Math.cos(a - q))) < 0.16);
-    if (near || falls.some((f) => Math.abs(Math.atan2(Math.sin(a - f), Math.cos(a - f))) < 0.2)) continue;
-    const s = 0.16 + rr() * 0.16;
-    const m = kit.put(island, shrubGeo, kit.mat(greens[i % 3], 0.9, 0, true), Math.cos(a) * 11.05, s * 0.7, Math.sin(a) * 11.05, false);
-    m.scale.set(s * 1.4, s, s * 1.4);
-  }
-
-  /* waterfalls spilling off the rim */
-  const streak = canvasTex(64, 256, (g, w, h) => {
-    g.clearRect(0, 0, w, h);
-    const r = rng(21);
-    for (let i = 0; i < 26; i++) {
-      g.fillStyle = `rgba(255,255,255,${0.25 + r() * 0.6})`;
-      g.fillRect(r() * w, r() * h, 2 + r() * 4, 30 + r() * 110);
-    }
-    g.fillStyle = "rgba(150,225,240,0.35)";
-    g.fillRect(0, 0, w, h);
-  });
-  streak.wrapT = THREE.RepeatWrapping;
-  const fallMat = new THREE.MeshBasicMaterial({ map: streak, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
-  const mists: THREE.Mesh[] = [];
-  const mistMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28, depthWrite: false });
-  falls.forEach((a) => {
-    const pivot = new THREE.Group();
-    pivot.position.set(Math.cos(a) * 11.5, -0.04, Math.sin(a) * 11.5);
-    pivot.rotation.y = Math.PI / 2 - a;
-    island.add(pivot);
-    const geo = new THREE.PlaneGeometry(0.9, 2.5);
-    geo.translate(0, -1.25, 0);
-    const sheet = new THREE.Mesh(geo, fallMat);
-    sheet.rotation.x = 0.5;
-    sheet.position.z = 0.05;
-    pivot.add(sheet);
-    kit.box(pivot, 0.9, 0.03, 2.4, 0x5ccfe8, 0, 0.03, -1.2, false);
-    [0, 1, 2].forEach((m) => {
-      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), mistMat);
-      puff.position.set((m - 1) * 0.35, -2.4, 1.1);
-      pivot.add(puff);
-      mists.push(puff);
-    });
-  });
-  kit.anims.push((t, dt) => {
-    streak.offset.y -= dt * 1.1;
-    mists.forEach((m, i) => m.scale.setScalar(1 + Math.sin(t * 1.6 + i) * 0.25));
-  });
-
-  /* tunnel mouths where the roads leave the island */
-  const stone = kit.mat(0x9a8f80, 0.95);
-  const black = new THREE.MeshBasicMaterial({ color: 0x05080a });
-  const mouth = (axis: "x" | "z", s: 1 | -1) => {
-    const g = new THREE.Group();
-    g.position.set(axis === "x" ? s * 10.6 : 0, 0, axis === "z" ? s * 10.6 : 0);
-    g.rotation.y = axis === "x" ? Math.PI / 2 : 0;
-    island.add(g);
-    kit.box(g, 3.4, 1.7, 1.2, stone, 0, 0, 0);
-    kit.box(g, 3.5, 0.12, 1.3, 0x6bb56a, 0, 1.7, 0, false);
-    const face = s * (axis === "x" ? 1 : 1);
-    const hole = new THREE.Mesh(new THREE.PlaneGeometry(1.75, 0.95), black);
-    hole.position.set(0, 0.5, -0.61 * face);
-    hole.rotation.y = face > 0 ? Math.PI : 0;
-    g.add(hole);
-    kit.box(g, 0.2, 1.0, 0.1, 0xf25c54, -0.92, 0, -0.62 * face, false);
-    kit.box(g, 0.2, 1.0, 0.1, 0xf25c54, 0.92, 0, -0.62 * face, false);
-    kit.box(g, 2.0, 0.12, 0.1, 0xf25c54, 0, 1.0, -0.62 * face, false);
-  };
-  mouth("x", 1);
-  mouth("x", -1);
-  mouth("z", 1);
-  mouth("z", -1);
-}
-
-/* ------------------------------------------------------------------ */
 /* Roads, crossings, lamps, trees and the people on the pavements                                  */
 /* ------------------------------------------------------------------ */
-export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, folks: Folks): void {
-  const asphalt = kit.mat(0x2b3640, 0.92);
-  const curb = kit.mat(0xd4c9b5, 0.9);
+export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, folks: Folks, palms: Palms): void {
+  const asphalt = worldUV(new THREE.MeshStandardMaterial({ ...asphaltMaps(1), roughness: 1, normalScale: new THREE.Vector2(0.7, 0.7) }), 0.45);
+  const curb = worldUV(new THREE.MeshStandardMaterial({ ...pavingMaps(1), roughness: 1, normalScale: new THREE.Vector2(0.9, 0.9) }), 1.1);
   const paint = kit.mat(0xfff1d0, 0.7);
   const amber = kit.mat(0xffd36b, 0.7);
 
@@ -376,23 +316,35 @@ export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, fol
   /* trees: a ring around the rim and a few in the corners */
   const rr = rng(17);
   const trunk = kit.mat(0x8a5a3c, 0.9);
-  const leafA = [kit.mat(0x3faf6e, 0.85, 0, true), kit.mat(0x58c985, 0.85, 0, true), kit.mat(0x2f9a60, 0.85, 0, true)];
+  const leafA = [0x3f9a5a, 0x5aae5e, 0x2f8a52].map((c) =>
+    windify(new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, vertexColors: true }), "crown"),
+  );
   const tree = (x: number, z: number, s: number) => {
+    /* every other one is a palm, drawn with the rest in one instanced mesh */
+    if (rr() < 0.5) {
+      palms.add(x, 0, z, s * 0.85, rr() * 6.28);
+      return;
+    }
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     g.scale.setScalar(s);
     island.add(g);
     kit.cyl(g, 0.07, 0.11, 0.55, trunk, 0, 0, 0, 6);
-    const pine = rr() < 0.5;
     const leaf = leafA[Math.floor(rr() * 3)];
-    if (pine) {
-      kit.cone(g, 0.5, 0.9, leaf, 0, 0.4, 0, 7);
-      kit.cone(g, 0.38, 0.8, leaf, 0, 0.9, 0, 7);
-      kit.cone(g, 0.25, 0.6, leaf, 0, 1.35, 0, 7);
-    } else {
-      kit.put(g, new THREE.IcosahedronGeometry(0.5, 0), leaf, 0, 0.95, 0);
-      kit.put(g, new THREE.IcosahedronGeometry(0.34, 0), leaf, 0.3, 0.7, 0.1);
-      kit.put(g, new THREE.IcosahedronGeometry(0.3, 0), leaf, -0.28, 0.75, -0.12);
+    {
+      /* a broad crown built from a few overlapping leaf masses */
+      const parts: [number, number, number, number][] = [
+        [0, 1.0, 0, 0.5],
+        [0.3, 0.8, 0.12, 0.36],
+        [-0.28, 0.82, -0.12, 0.34],
+        [0.05, 0.78, -0.3, 0.32],
+        [-0.08, 1.28, 0.06, 0.32],
+      ];
+      parts.forEach(([px, py, pz, r]) => {
+        const m = kit.put(g, leafBlob(Math.floor(rr() * 6), 3), leaf, px, py, pz);
+        m.scale.setScalar(r);
+        m.rotation.y = rr() * 6.28;
+      });
     }
   };
   for (let i = 0; i < 20; i++) {
@@ -456,6 +408,9 @@ export function makeArcs(kit: Kit, island: THREE.Group, points: Record<string, T
     ["carebooks", "oliva"],
     ["arvo", "sahefa"],
     ["arvo", "carebooks"],
+    ["sgsoft", "villagewellth"],
+    ["sgsoft", "watan"],
+    ["sgsoft", "sahefa"],
   ];
   const lineMat = new THREE.MeshBasicMaterial({
     color: new THREE.Color(0xff8a6a).multiplyScalar(1.5),
@@ -576,7 +531,6 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
   const env = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), envMat);
   env.scale.set(1, 1.2, 1);
   env.position.y = 1.4;
-  env.castShadow = true;
   bal.add(env);
   kit.cone(bal, 0.32, 0.55, envMat, 0, 0.35, 0, 12, false).rotation.x = Math.PI;
   kit.box(bal, 0.34, 0.24, 0.34, 0x8a5a3c, 0, -0.1, 0, true);
@@ -635,19 +589,15 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
     return g;
   };
   const boats = [
-    { g: sailboat(0xf25c54), rad: 20, sp: 0.04, a0: 0.5 },
-    { g: sailboat(0x2f80c8), rad: 25, sp: 0.03, a0: 3.4 },
-    { g: ferry(), rad: 31, sp: -0.022, a0: 2.2 },
+    { g: sailboat(0xf25c54), rad: 23, sp: 0.04, a0: 0.5 },
+    { g: sailboat(0x2f80c8), rad: 34, sp: 0.03, a0: 3.4 },
+    { g: ferry(), rad: 43, sp: -0.022, a0: 2.2 },
   ];
 
   /* lighthouse on a rock */
   const lh = new THREE.Group();
-  lh.position.set(25, SEA_Y, -17);
+  lh.position.set(ISLETS[1][0], -1.4, ISLETS[1][1]);
   scene.add(lh);
-  const rock = kit.mat(0x8a7a6a, 1, 0, true);
-  kit.put(lh, new THREE.DodecahedronGeometry(2.2, 0), rock, 0, 0.3, 0);
-  kit.put(lh, new THREE.DodecahedronGeometry(1.2, 0), rock, 1.8, 0.1, 1.0);
-  kit.put(lh, new THREE.DodecahedronGeometry(1.0, 0), rock, -1.5, 0.2, -1.2);
   for (let i = 0; i < 4; i++) {
     kit.cyl(lh, 0.55 - i * 0.05, 0.62 - i * 0.05, 0.9, i % 2 ? 0xfff4e3 : 0xf25c54, 0, 1.9 + i * 0.9, 0, 14);
   }
@@ -675,25 +625,55 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
     sweep.add(holder);
   });
 
-  /* clouds that catch the sunset */
-  const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true, emissive: 0x6b3a3a, emissiveIntensity: 0.35 });
+  /* soft clouds: billboards of layered puffs that catch the sunset on their lit side */
+  const puff = canvasTex(256, 256, (g, w, h) => {
+    const r = rng(77);
+    g.clearRect(0, 0, w, h);
+    for (let i = 0; i < 26; i++) {
+      const x = w * (0.22 + r() * 0.56);
+      const y = h * (0.38 + r() * 0.3);
+      const rad = w * (0.1 + r() * 0.16);
+      const gr = g.createRadialGradient(x, y - rad * 0.3, 0, x, y, rad);
+      gr.addColorStop(0, "rgba(255,255,255,0.55)");
+      gr.addColorStop(0.6, "rgba(250,246,244,0.25)");
+      gr.addColorStop(1, "rgba(240,236,240,0)");
+      g.fillStyle = gr;
+      g.beginPath();
+      g.arc(x, y, rad, 0, Math.PI * 2);
+      g.fill();
+    }
+    /* shade the underside */
+    g.globalCompositeOperation = "source-atop";
+    const under = g.createLinearGradient(0, h * 0.35, 0, h * 0.85);
+    under.addColorStop(0, "rgba(255,236,220,0)");
+    under.addColorStop(1, "rgba(150,120,140,0.55)");
+    g.fillStyle = under;
+    g.fillRect(0, 0, w, h);
+  });
+  const cloudMats: THREE.SpriteMaterial[] = [];
   const clouds: { g: THREE.Group; a: number; r: number; sp: number }[] = [];
-  for (let c = 0; c < 9; c++) {
+  for (let c = 0; c < 12; c++) {
     const g = new THREE.Group();
     const n = 3 + (c % 3);
     for (let k = 0; k < n; k++) {
-      const sp = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9 + (k % 2) * 0.35, 1), cloudMat);
-      sp.position.set(k * 1.1 - n * 0.55, (k % 2) * 0.3, (k % 3) * 0.25);
-      sp.scale.y = 0.55;
+      const m = new THREE.SpriteMaterial({ map: puff, transparent: true, depthWrite: false, opacity: 0.9, color: 0xffe2cc, fog: true });
+      cloudMats.push(m);
+      const sp = new THREE.Sprite(m);
+      sp.position.set(k * 3.2 - n * 1.6 + R() * 1.5, R() * 1.2, R() * 2);
+      sp.scale.set(7 + R() * 4, 4 + R() * 2, 1);
+      sp.material.rotation = (R() - 0.5) * 0.2;
       g.add(sp);
     }
-    const a = (c / 9) * Math.PI * 2;
-    const r = 26 + (c % 3) * 9;
-    g.position.set(Math.cos(a) * r, 10 + (c % 4) * 1.6, Math.sin(a) * r);
-    g.scale.setScalar(1.3 + (c % 3) * 0.5);
+    const a = (c / 12) * Math.PI * 2;
+    /* high enough that the camera never flies through them: they only show low on the horizon */
+    const r = 80 + (c % 3) * 16;
+    g.position.set(Math.cos(a) * r, 62 + (c % 4) * 5, Math.sin(a) * r);
+    g.scale.setScalar(2.6 + (c % 3) * 0.8);
     scene.add(g);
     clouds.push({ g, a, r, sp: 0.006 + (c % 3) * 0.003 });
   }
+  const cloudDay = new THREE.Color(0xffe2cc);
+  const cloudNight = new THREE.Color(0x3a4670);
 
   /* drifting lanterns and fireflies */
   const nL = 110;
@@ -755,6 +735,10 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
     beamMat.opacity = kit.night * 0.07;
     lamp.scale.setScalar(1 + Math.sin(t * 5) * 0.04);
 
+    cloudMats.forEach((m) => {
+      m.color.lerpColors(cloudDay, cloudNight, kit.night);
+      m.opacity = 0.9 - kit.night * 0.45;
+    });
     clouds.forEach((c) => {
       c.a += c.sp * dt;
       c.g.position.x = Math.cos(c.a) * c.r;

@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+
 import { rng, type Kit } from "./kit";
 
 export type Mode = "walk" | "stand" | "sit" | "wave" | "carry" | "cook" | "serve";
@@ -43,6 +45,32 @@ function pick(r: () => number, list: readonly number[]): number {
   return list[Math.floor(r() * list.length) % list.length];
 }
 
+let sharedMat: THREE.MeshStandardMaterial | null = null;
+const peopleMat = () => (sharedMat ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+const tint = new THREE.Color();
+const spot = new THREE.Vector3();
+
+/** A primitive moved into place and painted one colour, ready to merge with the rest of a body part. */
+function bit(g: THREE.BufferGeometry, color: number, x: number, y: number, z: number): THREE.BufferGeometry {
+  g.translate(x, y, z);
+  tint.set(color);
+  const n = g.attributes.position.count;
+  const c = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) c.set([tint.r, tint.g, tint.b], i * 3);
+  g.setAttribute("color", new THREE.BufferAttribute(c, 3));
+  return g;
+}
+/** Box whose bottom sits at y, like Kit.box. */
+const boxBit = (w: number, h: number, d: number, color: number, x: number, y: number, z: number) =>
+  bit(new THREE.BoxGeometry(w, h, d), color, x, y + h / 2, z);
+const ballBit = (r: number, color: number, x: number, y: number, z: number, seg: number, sc?: [number, number, number]) => {
+  const g = new THREE.SphereGeometry(r, seg, Math.max(8, Math.round(seg * 0.7)));
+  if (sc) g.scale(sc[0], sc[1], sc[2]);
+  return bit(g, color, x, y, z);
+};
+const cylBit = (rt: number, rb: number, h: number, color: number, x: number, y: number, z: number, seg: number) =>
+  bit(new THREE.CylinderGeometry(rt, rb, h, seg), color, x, y + h / 2, z);
+
 /** Low-poly townsfolk. Everyone is a handful of boxes with swinging arms and legs. */
 export class Folks {
   readonly all: Person[] = [];
@@ -74,7 +102,6 @@ export class Folks {
     ry = 0,
     o: { look?: Look; prop?: Prop; scale?: number; hat?: number } = {},
   ): Person {
-    const k = this.kit;
     const L = o.look ?? this.look();
     const root = new THREE.Group();
     root.position.set(x, y, z);
@@ -83,46 +110,44 @@ export class Folks {
     const rig = new THREE.Group();
     root.add(rig);
 
-    const shirt = k.mat(L.shirt, 0.85);
-    const pants = k.mat(L.pants, 0.9);
-    const skin = k.mat(L.skin, 0.8);
-    const hair = k.mat(L.hair, 0.9);
-
+    /* each body part is one vertex-coloured mesh, so a person is five draw calls */
+    const part = (g: THREE.Object3D, bits: THREE.BufferGeometry[], shadow: boolean) => {
+      const m = new THREE.Mesh(mergeGeometries(bits, false) ?? bits[0], peopleMat());
+      m.castShadow = shadow;
+      bits.forEach((b) => b.dispose());
+      g.add(m);
+      return m;
+    };
     const leg = (lx: number) => {
       const g = new THREE.Group();
       g.position.set(lx, 0.2, 0);
-      k.box(g, 0.075, 0.2, 0.085, pants, 0, -0.2, 0, false);
-      k.box(g, 0.08, 0.035, 0.12, 0x1c1c24, 0, -0.2, 0.018, false);
+      part(g, [boxBit(0.075, 0.2, 0.085, L.pants, 0, -0.2, 0), boxBit(0.08, 0.035, 0.12, 0x1c1c24, 0, -0.2, 0.018)], false);
       rig.add(g);
       return g;
     };
-    const arm = (ax: number) => {
+    const arm = (ax: number, bag: boolean) => {
       const g = new THREE.Group();
       g.position.set(ax, 0.43, 0);
-      k.box(g, 0.055, 0.2, 0.06, shirt, 0, -0.2, 0, false);
-      k.ball(g, 0.032, skin, 0, -0.208, 0, 8, false);
+      const bits = [boxBit(0.055, 0.2, 0.06, L.shirt, 0, -0.2, 0), ballBit(0.032, L.skin, 0, -0.208, 0, 8)];
+      if (bag) bits.push(boxBit(0.1, 0.075, 0.035, 0x6b432b, 0, -0.3, 0.02));
+      part(g, bits, false);
       rig.add(g);
       return g;
     };
+    const prop = o.prop ?? "none";
     const lLeg = leg(-0.045);
     const rLeg = leg(0.045);
-    k.box(rig, 0.19, 0.24, 0.11, shirt, 0, 0.2, 0, true);
-    const lArm = arm(-0.122);
-    const rArm = arm(0.122);
-    k.ball(rig, 0.072, skin, 0, 0.5, 0, 12, true);
-    const h = k.ball(rig, 0.077, hair, 0, 0.517, -0.012, 10, false);
-    h.scale.set(1, 0.78, 1.04);
-    if (o.hat !== undefined) {
-      k.cyl(rig, 0.07, 0.085, 0.13, o.hat, 0, 0.55, 0, 12, false);
-    }
-
-    const prop = o.prop ?? "none";
-    if (prop === "bag") k.box(rArm, 0.1, 0.075, 0.035, 0x6b432b, 0, -0.3, 0.02, false);
-    if (prop === "box") k.box(rig, 0.2, 0.14, 0.14, 0xc99a63, 0, 0.27, 0.17, true);
+    const lArm = arm(-0.122, false);
+    const rArm = arm(0.122, prop === "bag");
+    const body = [boxBit(0.19, 0.24, 0.11, L.shirt, 0, 0.2, 0), ballBit(0.072, L.skin, 0, 0.5, 0, 12)];
+    body.push(ballBit(0.077, L.hair, 0, 0.517, -0.012, 10, [1, 0.78, 1.04]));
+    if (o.hat !== undefined) body.push(cylBit(0.07, 0.085, 0.13, o.hat, 0, 0.55, 0, 12));
+    if (prop === "box") body.push(boxBit(0.2, 0.14, 0.14, 0xc99a63, 0, 0.27, 0.17));
     if (prop === "tray") {
-      k.box(rig, 0.2, 0.012, 0.14, 0xe6e6e6, 0.02, 0.33, 0.16, false);
-      k.ball(rig, 0.03, 0xf25c54, 0.02, 0.35, 0.16, 8, false);
+      body.push(boxBit(0.2, 0.012, 0.14, 0xe6e6e6, 0.02, 0.33, 0.16));
+      body.push(ballBit(0.03, 0xf25c54, 0.02, 0.35, 0.16, 8));
     }
+    part(rig, body, true);
 
     parent.add(root);
     const p: Person = { root, rig, lArm, rArm, lLeg, rLeg, mode, phase: this.rand() * 6.28 };
@@ -141,6 +166,11 @@ export class Folks {
     this.walkers.push({ p, pts: loop, cum, total, speed, s: start * total, y });
   }
 
+  /** Hides everyone further than `max` from the camera: a few pixels tall, but five draw calls each. */
+  cull(cam: THREE.Vector3, max: number): void {
+    for (const p of this.all) p.root.visible = spot.setFromMatrixPosition(p.root.matrixWorld).distanceTo(cam) < max;
+  }
+
   update(t: number, dt: number): void {
     for (const w of this.walkers) {
       w.s = (w.s + w.speed * dt) % w.total;
@@ -155,6 +185,7 @@ export class Folks {
       w.p.root.rotation.y += angDiff(w.p.root.rotation.y, target) * Math.min(1, dt * 9);
     }
     for (const p of this.all) {
+      if (!p.root.visible) continue;
       const ph = p.phase;
       switch (p.mode) {
         case "walk": {
