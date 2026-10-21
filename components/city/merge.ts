@@ -39,14 +39,16 @@ function painted(key: string, like: THREE.MeshStandardMaterial): THREE.MeshStand
   return m;
 }
 
-export function mergeStatic(
+export async function mergeStatic(
   root: THREE.Object3D,
-  o: { anchors: THREE.Object3D[]; skip: THREE.Object3D[]; simulate: () => void },
-): number {
+  o: { anchors: THREE.Object3D[]; skip: THREE.Object3D[]; simulate: () => void; pause: () => Promise<void> },
+): Promise<number> {
   root.updateMatrixWorld(true);
   const before = new Map<THREE.Object3D, { m: number[]; v: boolean }>();
   root.traverse((ob) => before.set(ob, { m: ob.matrix.elements.slice(), v: ob.visible }));
+  await o.pause();
   o.simulate();
+  await o.pause();
   root.updateMatrixWorld(true);
   const moved = new Set<THREE.Object3D>();
   before.forEach((b, ob) => {
@@ -113,8 +115,9 @@ export function mergeStatic(
   let removed = 0;
   const inv = new THREE.Matrix4();
   const rel = new THREE.Matrix4();
-  buckets.forEach((b) => {
-    if (b.meshes.length < 2 && !b.paint) return;
+  for (const b of buckets.values()) {
+    await o.pause();
+    if (b.meshes.length < 2 && !b.paint) continue;
     inv.copy(b.anchor.matrixWorld).invert();
     const geos = b.meshes.map((m) => {
       let g = m.geometry.clone();
@@ -148,7 +151,7 @@ export function mergeStatic(
     });
     const merged = mergeGeometries(geos, false);
     geos.forEach((g) => g.dispose());
-    if (!merged) return;
+    if (!merged) continue;
     const first = b.meshes[0];
     const mesh = new THREE.Mesh(merged, b.mat);
     mesh.castShadow = first.castShadow;
@@ -160,6 +163,6 @@ export function mergeStatic(
     /* the originals leave the scene but keep their world matrices, so rays can still hit them */
     for (const m of b.meshes) m.removeFromParent();
     removed += b.meshes.length - 1;
-  });
+  }
   return removed;
 }

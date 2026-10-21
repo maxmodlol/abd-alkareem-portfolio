@@ -12,7 +12,7 @@ import { Traffic } from "./traffic";
 import { createPhysicalSky, makeArcs, makeSea, makeSkyLife, makeSky, makeStreets } from "./world";
 import { grassR, makeCoast, makeDowntown, makeIslets, Palms, SGSOFT_POS, SGSOFT_ROT, type Solid } from "./coast";
 import { mergeStatic } from "./merge";
-import { setTextureDetail } from "./textures";
+import { prepareTextures } from "./textures";
 
 export type { BuildingId };
 export type FocusKey = BuildingId | "home";
@@ -157,9 +157,19 @@ const breathe = () =>
     else setTimeout(r, 0);
   });
 
+/* the same, but only once the current slice of work has run for a few milliseconds */
+let sliceAt = 0;
+const pause = async () => {
+  if (performance.now() - sliceAt < 8) return;
+  await breathe();
+  sliceAt = performance.now();
+};
+
 export async function createCityScene(opts: CityOptions): Promise<CityScene | null> {
   const { canvas, tagEls, getMetrics, onPick, reduceMotion } = opts;
   const startNarrow = getMetrics().narrow;
+  /* the ground and sea maps are worked out in the background while the renderer and sky get going */
+  const texturesReady = prepareTextures(startNarrow);
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -226,7 +236,6 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   await breathe();
 
   /* the world */
-  setTextureDetail(startNarrow);
   const kit = new Kit();
   kit.lightsOn = !cheap;
   const folks = new Folks(kit);
@@ -234,22 +243,29 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   const sky = makeSky(scene);
   const island = new THREE.Group();
   scene.add(island);
+  await texturesReady;
   const sea = makeSea(scene);
   await breathe();
   const palms = new Palms();
   const extraSolids: Solid[] = makeCoast(kit, island, palms);
   await breathe();
   makeIslets(kit, scene, palms);
+  await breathe();
   extraSolids.push(...makeDowntown(kit, island, palms));
   await breathe();
   buildVillageWellth(kit, folks, island);
+  await breathe();
   buildSahefa(kit, folks, island);
+  await breathe();
   buildDiwan(kit, folks, island);
   await breathe();
   buildOliva(kit, folks, island);
+  await breathe();
   const watan = buildWatan(kit, folks, island);
+  await breathe();
   buildCarebooks(kit, folks, island, "CareBooks");
   buildArvo(kit, folks, island, "Arvo");
+  await breathe();
   buildSgsoft(kit, folks, island, SGSOFT_POS, SGSOFT_ROT);
   await breathe();
   traffic.zones.push({ axis: "x", dir: -1, stop: -7.55, red: () => !watan.gate.open });
@@ -257,6 +273,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   makeStreets(kit, island, traffic, folks, palms);
   await breathe();
   palms.build(island, !startNarrow);
+  await breathe();
   makeArcs(kit, island, {
     villagewellth: new THREE.Vector3(-4.6, 9.3, -4.6),
     sahefa: new THREE.Vector3(4.6, 3.4, -4.6),
@@ -626,7 +643,8 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   layout();
   await breathe();
   /* bake everything that stands still into a few meshes; the scene was ~1,800 draw calls a frame */
-  mergeStatic(scene, {
+  await mergeStatic(scene, {
+    pause,
     anchors: ids.map((id) => byId[id]),
     skip: [explorer.root, explorer.ring, padGroup, ring, ...gems],
     simulate: () => {
@@ -1193,12 +1211,28 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
     });
     govern(now, performance.now() - began, half);
   };
-  /* compile every shader up front without blocking, instead of all at once inside the first frame */
+  /* compile every shader up front, a few objects at a time and without waiting on the graphics card,
+     instead of all at once inside the first frame */
+  /* the post effects draw the scene into an off-screen target, which needs its own shader variants */
+  const warmTarget = fx ? new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }) : null;
+  renderer.setRenderTarget(warmTarget);
   try {
+    for (const group of [...island.children, ...scene.children]) {
+      if (group === island) continue;
+      renderer.compile(group, camera, scene);
+      await pause();
+    }
     await renderer.compileAsync(scene, camera);
+    /* reading each program's uniforms is the other slow part of a first frame */
+    for (const prog of renderer.info.programs ?? []) {
+      (prog as unknown as { getUniforms: () => unknown }).getUniforms();
+      await pause();
+    }
   } catch {
     /* older browsers compile on first use */
   }
+  renderer.setRenderTarget(null);
+  warmTarget?.dispose();
   /* and upload the textures a few at a time, instead of all of them inside the first frame */
   const textures = new Set<THREE.Texture>();
   scene.traverse((o) => {
@@ -1208,10 +1242,9 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
       for (const v of Object.values(m)) if (v instanceof THREE.Texture) textures.add(v);
     }
   });
-  let up = 0;
   for (const tex of textures) {
     renderer.initTexture(tex);
-    if (++up % 6 === 0) await breathe();
+    await pause();
   }
   if (soft) {
     setTier(4);
