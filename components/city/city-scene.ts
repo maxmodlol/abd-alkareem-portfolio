@@ -230,6 +230,17 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   envSky.set(new THREE.Vector3(-0.5, 0.72, 0.48).normalize(), 1);
   const envMesh = envSky.mesh;
   envScene.add(envMesh);
+  /* compile the sky shader in the background first, so the reflections below don't wait on it */
+  const envWarm = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  renderer.setRenderTarget(envWarm);
+  try {
+    await renderer.compileAsync(envScene, camera);
+  } catch {
+    /* compiled on first use instead */
+  }
+  renderer.setRenderTarget(null);
+  envWarm.dispose();
+  await breathe();
   const envRT = pmrem.fromScene(envScene, 0.02);
   scene.environment = envRT.texture;
   scene.environmentIntensity = 0.7;
@@ -1233,6 +1244,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   }
   renderer.setRenderTarget(null);
   warmTarget?.dispose();
+  await fx?.warm(pause);
   /* and upload the textures a few at a time, instead of all of them inside the first frame */
   const textures = new Set<THREE.Texture>();
   scene.traverse((o) => {
