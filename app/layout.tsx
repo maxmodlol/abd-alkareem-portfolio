@@ -1,19 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Fragment_Mono, Hanken_Grotesk, Syne } from "next/font/google";
+import { Fragment_Mono, Hanken_Grotesk } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { getSiteUrl } from "@/lib/site";
 
 import "./globals.css";
-
-/* Syne, a wide, loud display face for the name and the headlines; it is set big and moves */
-const syne = Syne({
-  variable: "--font-syne",
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["500", "700", "800"],
-});
 
 const hanken = Hanken_Grotesk({
   variable: "--font-hanken",
@@ -94,7 +86,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${syne.variable} ${hanken.variable} ${fragmentMono.variable}`}>
+      <body className={`${hanken.variable} ${fragmentMono.variable}`}>
         {children}
         <Analytics />
         <SpeedInsights />
