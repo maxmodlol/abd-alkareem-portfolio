@@ -116,7 +116,7 @@ export class Explorer {
     this.ring = new THREE.Mesh(
       new THREE.RingGeometry(0.26, 0.33, 40),
       new THREE.MeshBasicMaterial({
-        color: 0xd7c68a,
+        color: 0xff6fb0,
         transparent: true,
         opacity: 0.55,
         blending: THREE.AdditiveBlending,

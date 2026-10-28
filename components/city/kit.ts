@@ -206,10 +206,10 @@ export class Kit {
     const cw = 28;
     const ch = 32;
     const R = rng(o.seed);
-    /* fewer, warmer windows: an inhabited city at night, not an office block with every light on */
+    /* fewer windows lit, in the city's light family: an inhabited city at dusk, not an office block with every light on */
     const litChance = (o.lit ?? 0.55) * 0.75;
     const cells: (string | null)[] = [];
-    const warm = ["#ffd9a0", "#ffe3b8", "#ffc27a", "#f6dca6", "#ffd9a0", "#d9e2ff"];
+    const warm = ["#ffd2b0", "#ffc4e0", "#bff4ff", "#f4f1ff", "#ffb3d6", "#9fe9ff"];
     for (let i = 0; i < o.cols * o.rows; i++) {
       cells.push(R() < litChance ? warm[Math.floor(R() * warm.length)] : null);
     }
@@ -217,7 +217,7 @@ export class Kit {
     const H = o.rows * ch;
     const wall = gradeCss(base);
     const tintGlass = new THREE.Color(gradeCss(o.glass ?? "#8ec3df"));
-    const glassTop = `#${new THREE.Color(0x2b3448).lerp(tintGlass, 0.25).getHexString()}`;
+    const glassTop = `#${new THREE.Color(0x5464b8).lerp(tintGlass, 0.35).getHexString()}`;
     const map = canvasTex(W, H, (g) => {
       g.fillStyle = wall;
       g.fillRect(0, 0, W, H);
@@ -225,16 +225,16 @@ export class Kit {
         for (let c = 0; c < o.cols; c++) {
           const x = c * cw;
           const y = r * ch;
-          /* dark glass that only shows colour where it catches the sky */
+          /* glass that holds the sky: indigo at the top of each pane, deep sea at the sill */
           const grd = g.createLinearGradient(0, y + 4, 0, y + ch - 4);
           grd.addColorStop(0, glassTop);
-          grd.addColorStop(1, "#090c13");
+          grd.addColorStop(1, "#18204a");
           g.fillStyle = grd;
           g.fillRect(x + 3, y + 4, cw - 6, ch - 8);
-          /* a slim mullion and a brushed-metal spandrel between floors */
+          /* a slim mullion and a thin rose line between floors */
           g.fillStyle = wall;
           g.fillRect(x + cw / 2 - 0.5, y + 4, 1, ch - 8);
-          g.fillStyle = "rgba(215,198,138,0.10)";
+          g.fillStyle = "rgba(255,111,176,0.16)";
           g.fillRect(x, y + ch - 3, cw, 1);
           g.fillStyle = "rgba(255,255,255,0.05)";
           g.beginPath();
@@ -248,17 +248,17 @@ export class Kit {
       }
       /* a faint wash, darker towards the street */
       const wash = g.createLinearGradient(0, 0, 0, H);
-      wash.addColorStop(0, "rgba(9,11,16,0)");
-      wash.addColorStop(1, "rgba(9,11,16,0.22)");
+      wash.addColorStop(0, "rgba(11,16,48,0)");
+      wash.addColorStop(1, "rgba(11,16,48,0.16)");
       g.fillStyle = wash;
       g.fillRect(0, 0, W, H);
     });
-    /* glass is smooth and metallic so it mirrors the sky; the panels between are brushed composite (G roughness, B metalness) */
+    /* glass is smooth and metallic so it mirrors the sky; the panels between are satin ceramic (G roughness, B metalness) */
     const rm = canvasTex(
       W,
       H,
       (g) => {
-        g.fillStyle = "rgb(0,150,120)";
+        g.fillStyle = "rgb(0,160,30)";
         g.fillRect(0, 0, W, H);
         g.fillStyle = "rgb(0,26,190)";
         for (let r = 0; r < o.rows; r++) {
@@ -312,29 +312,32 @@ export class Kit {
     h: number,
     o: { fg: string; bg: string; day?: number; night?: number; radius?: number },
   ): THREE.Mesh {
-    /* every sign is set in the house style: a dark plate, a hairline of gold and champagne capitals */
+    /* every sign is set in the house style: a deep-sea plate, a hairline that runs from rose to cyan and pearl capitals */
     void o.fg;
     void o.bg;
     const pxW = 512;
     const pxH = Math.max(64, Math.round((512 * h) / w));
     const map = canvasTex(pxW, pxH, (g, cw, chh) => {
       const r = (o.radius ?? 0.12) * chh;
-      g.fillStyle = "#0b0e16";
+      g.fillStyle = "#0b1030";
       roundRectPath(g, 2, 2, cw - 4, chh - 4, r);
       g.fill();
-      g.strokeStyle = "rgba(215,198,138,0.75)";
+      const hair = g.createLinearGradient(0, 0, cw, 0);
+      hair.addColorStop(0, "#ff6fb0");
+      hair.addColorStop(1, "#5ce6ff");
+      g.strokeStyle = hair;
       g.lineWidth = Math.max(2, chh * 0.04);
       roundRectPath(g, chh * 0.08, chh * 0.08, cw - chh * 0.16, chh - chh * 0.16, r * 0.7);
       g.stroke();
-      g.fillStyle = "#e9d9a6";
+      g.fillStyle = "#f4f1ff";
       g.textAlign = "center";
       g.textBaseline = "middle";
       const label = text.toUpperCase();
       const spaced = g as CanvasRenderingContext2D & { letterSpacing?: string };
       let size = chh * 0.46;
       const set = () => {
-        g.font = `500 ${size}px ${displayFont()}`;
-        spaced.letterSpacing = `${Math.round(size * 0.22)}px`;
+        g.font = `700 ${size}px ${displayFont()}`;
+        spaced.letterSpacing = `${Math.round(size * 0.08)}px`;
       };
       set();
       while (g.measureText(label).width > cw * 0.82 && size > 10) {

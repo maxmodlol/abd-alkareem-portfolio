@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fragment_Mono, Hanken_Grotesk, Jost } from "next/font/google";
+import { Fragment_Mono, Hanken_Grotesk, Syne } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -7,12 +7,12 @@ import { getSiteUrl } from "@/lib/site";
 
 import "./globals.css";
 
-/* Jost, a Futura revival, set light and widely tracked: the type of every film that imagined the future */
-const jost = Jost({
-  variable: "--font-jost",
+/* Syne, a wide, loud display face for the name and the headlines; it is set big and moves */
+const syne = Syne({
+  variable: "--font-syne",
   subsets: ["latin"],
   display: "swap",
-  weight: ["300", "400", "500"],
+  weight: ["500", "700", "800"],
 });
 
 const hanken = Hanken_Grotesk({
@@ -80,7 +80,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#090b10",
+  themeColor: "#03050a",
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
@@ -94,7 +94,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${jost.variable} ${hanken.variable} ${fragmentMono.variable}`}>
+      <body className={`${syne.variable} ${hanken.variable} ${fragmentMono.variable}`}>
         {children}
         <Analytics />
         <SpeedInsights />

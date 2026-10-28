@@ -280,7 +280,7 @@ export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): Solid[] 
 
   /* transit gates where the roads leave the island: cars drive into a slow vortex of gold light */
   const frame = kit.mat(0x4a505c, 0.4, 0.6);
-  const trim = kit.glowMat(0xd7c68a, 0.9, 1.8, 0x14130e);
+  const trim = kit.glowMat(0xff6fb0, 0.9, 1.8, 0x14130e);
   const swirl = canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = "#07080c";
     g.fillRect(0, 0, w, h);
@@ -378,7 +378,7 @@ function makeSkyline(kit: Kit, scene: THREE.Scene, cx: number, cz: number, r: nu
   const R = rng(seed);
   const facs = [0, 1].map((k) => kit.facade(k ? "#4a5060" : "#2c313c", { cols: 8, rows: 24, seed: seed + k, lit: 0.42, day: 0.5, night: 2.2 }));
   const roof = kit.mat(0x2a2e38, 0.6, 0.4);
-  const crown = kit.glowMat(0xd7c68a, 0.9, 2.4, 0x1a1810);
+  const crown = kit.glowMat(0xff6fb0, 0.9, 2.4, 0x1a1810);
   const n = Math.round(r * 0.7);
   for (let k = 0; k < n; k++) {
     const a = R() * Math.PI * 2;
@@ -412,12 +412,12 @@ export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): Solid
   const ax = Math.cos(DOWNTOWN_A);
   const az = Math.sin(DOWNTOWN_A);
   const at = (u: number, v: number): [number, number] => [ax * u - az * v, az * u + ax * v];
-  const glow = kit.glowMat(0xd7c68a, 0.7, 2.2, 0x14130e);
+  const glow = kit.glowMat(0xff6fb0, 0.7, 2.2, 0x14130e);
   const blink = kit.glowMat(0xff3b30, 1.5, 5, 0x330000);
   const blinkers: THREE.Mesh[] = [];
   const rings: THREE.Mesh[] = [];
   const ringMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0xf3e2b0).multiplyScalar(1.2),
+    color: new THREE.Color(0xf4f1ff).multiplyScalar(1.2),
     transparent: true,
     opacity: 0.55,
     blending: THREE.AdditiveBlending,

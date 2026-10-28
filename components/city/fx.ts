@@ -19,13 +19,13 @@ export type Fx = {
   dispose: () => void;
 };
 
-/** Film look: bloom, tilt-shift softness at the top and bottom, a navy-and-champagne split tone, vignette and grain. */
+/** Film look: bloom, tilt-shift softness at the top and bottom, a cyan-and-rose split tone, vignette and grain. */
 const GRADE = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
     uTime: { value: 0 },
     uRes: { value: new THREE.Vector2(1, 1) },
-    uVig: { value: 0.34 },
+    uVig: { value: 0.26 },
     uGrain: { value: 0.012 },
     uAb: { value: 0.00025 },
     uTilt: { value: 1 },
@@ -59,11 +59,11 @@ const GRADE = {
       float ab = uAb * dot(c, c) * 4.0;
       col.r = mix(col.r, texture2D(tDiffuse, vUv + c * ab * 6.0).r, 1.0 - band);
       col.b = mix(col.b, texture2D(tDiffuse, vUv - c * ab * 6.0).b, 1.0 - band);
-      /* split tone: shadows sink towards midnight navy, highlights warm towards champagne */
+      /* split tone: shadows lean towards deep-sea cyan, highlights towards rose; a touch more colour overall */
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(col, col * vec3(1.06, 1.0, 0.86), smoothstep(0.35, 1.0, l));
-      col = mix(col, col * vec3(0.9, 0.96, 1.14), 1.0 - smoothstep(0.0, 0.35, l));
-      col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 0.92);
+      col = mix(col, col * vec3(1.05, 0.97, 1.03), smoothstep(0.35, 1.0, l));
+      col = mix(col, col * vec3(0.88, 1.0, 1.14), 1.0 - smoothstep(0.0, 0.35, l));
+      col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 1.08);
       col = (col - 0.5) * 1.07 + 0.5;
       col = max(col, vec3(0.0));
       float d = length(c * vec2(1.0, 0.92));
@@ -175,8 +175,8 @@ export function createFx(
       },
       setNight(n) {
         /* the city is dark at every hour, so the windows, lamps and gold lines are what bloom */
-        bloom.strength = 0.32 + n * 0.22;
-        bloom.threshold = 0.95 - n * 0.15;
+        bloom.strength = 0.42 + n * 0.3;
+        bloom.threshold = 0.88 - n * 0.16;
       },
       dispose() {
         renderPass.dispose();

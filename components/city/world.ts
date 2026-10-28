@@ -12,18 +12,19 @@ export { SEA_Y };
 /* ------------------------------------------------------------------ */
 /* Sky                                                                                             */
 /* ------------------------------------------------------------------ */
-/* 2049: "day" is the blue hour, a navy sky over a last band of amber; night is nearly black */
+/* bloom: "day" is the blue hour, deep indigo overhead falling to a band of rose and peach at the
+   horizon; night is a deep-sea navy with a cyan glow where the sun went down */
 const SKY_DAY = {
-  top: new THREE.Color(0x06080f),
-  mid: new THREE.Color(0x10172a),
-  hor: new THREE.Color(0x2a3349),
-  sun: new THREE.Color(0xff9a52),
+  top: new THREE.Color(0x1d2a78),
+  mid: new THREE.Color(0x6d5cc4),
+  hor: new THREE.Color(0xffa9c4),
+  sun: new THREE.Color(0xffc9a6),
 };
 const SKY_NIGHT = {
-  top: new THREE.Color(0x030409),
-  mid: new THREE.Color(0x080b14),
-  hor: new THREE.Color(0x181e2e),
-  sun: new THREE.Color(0x7d8fc2),
+  top: new THREE.Color(0x050a26),
+  mid: new THREE.Color(0x142060),
+  hor: new THREE.Color(0x4a3a8c),
+  sun: new THREE.Color(0x5ce6ff),
 };
 
 export function createSkyMaterial(): THREE.ShaderMaterial {
@@ -113,7 +114,7 @@ export function makeSky(scene: THREE.Scene): Sky {
       (u.uSun.value as THREE.Color).lerpColors(SKY_DAY.sun, SKY_NIGHT.sun, night);
       (u.uSunDir.value as THREE.Vector3).copy(sunDir);
       u.uSunPower.value = 1 - night * 0.7;
-      fog.copy(u.uHor.value as THREE.Color);
+      fog.copy(u.uHor.value as THREE.Color).lerp(u.uMid.value as THREE.Color, 0.62);
       dome.position.copy(cam);
       stars.position.copy(cam);
       starMat.opacity = 0.28 + night * 0.5;
@@ -142,7 +143,7 @@ export function makeSea(scene: THREE.Scene): Sea {
     metalness: 0,
     normalMap: rippleNormal(70),
     normalScale: new THREE.Vector2(0.22, 0.22),
-    envMapIntensity: 0.9,
+    envMapIntensity: 0.55,
   });
   mat.userData.keepColor = true;
   const seaU = {
@@ -188,16 +189,16 @@ export function makeSea(scene: THREE.Scene): Sea {
         float d = shoreDist(vSeaP);
         float n1 = sNoise(vSeaP * 1.6 + vec2(uTime * 0.18, -uTime * 0.12));
         float n2 = sNoise(vSeaP * 0.3 - vec2(uTime * 0.04));
-        /* a dark harbour: slate over the shallows, ink further out, with only a hint of crest */
-        vec3 water = mix(vec3(0.028, 0.036, 0.05), vec3(0.016, 0.021, 0.032), smoothstep(0.1, 3.8, d + (n2 - 0.5) * 1.4));
-        water = mix(water, vec3(0.01, 0.013, 0.021), smoothstep(3.0, 12.0, d));
-        water = mix(water, vec3(0.006, 0.008, 0.013), smoothstep(18.0, 70.0, d));
-        water = mix(water, vec3(0.12, 0.13, 0.16), smoothstep(0.08, 0.22, vWave) * 0.25);
+        /* a glowing lagoon: aqua over the shallows, sea blue further out, deep indigo at the edge of the world */
+        vec3 water = mix(vec3(0.05, 0.34, 0.42), vec3(0.02, 0.16, 0.3), smoothstep(0.1, 3.8, d + (n2 - 0.5) * 1.4));
+        water = mix(water, vec3(0.018, 0.07, 0.19), smoothstep(3.0, 12.0, d));
+        water = mix(water, vec3(0.016, 0.03, 0.1), smoothstep(18.0, 70.0, d));
+        water = mix(water, vec3(0.3, 0.6, 0.7), smoothstep(0.08, 0.22, vWave) * 0.25);
         float edge = 1.0 - smoothstep(0.04, 0.22 + n1 * 0.3, d);
         float band = smoothstep(0.6, 0.92, sin(d * 3.3 - uTime * 1.3 + n2 * 5.0) * 0.5 + 0.5)
           * (1.0 - smoothstep(0.4, 2.6, d)) * smoothstep(0.3, 0.6, n1);
         seaFoam = clamp(max(edge, band * 0.75), 0.0, 1.0) * 0.45;
-        vec3 dayCol = mix(water, vec3(0.32, 0.34, 0.4), seaFoam);
+        vec3 dayCol = mix(water, vec3(0.75, 0.9, 0.95), seaFoam);
         diffuseColor.rgb = mix(dayCol, dayCol * 0.6, uNight);`,
       )
       .replace(
@@ -216,7 +217,7 @@ export function makeSea(scene: THREE.Scene): Sea {
         normal = normalize(tbn * mapN);`,
       );
   };
-  mat.customProgramCacheKey = () => "harbour-2049";
+  mat.customProgramCacheKey = () => "lagoon-bloom";
   const sea = new THREE.Mesh(geo, mat);
   sea.position.y = SEA_Y;
   sea.receiveShadow = true;
@@ -238,8 +239,8 @@ export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, fol
   const curb = worldUV(new THREE.MeshStandardMaterial({ ...pavingMaps(1), roughness: 1, normalScale: new THREE.Vector2(0.9, 0.9) }), 1.1);
   const paint = kit.mat(0xfff1d0, 0.7);
   /* the lane markings are lit from within: a thin line of gold down every road */
-  const amber = kit.glowMat(0xd7c68a, 0.5, 1.5, 0x1a1810);
-  const strip = kit.glowMat(0xd7c68a, 0.35, 1.2, 0x15140f);
+  const amber = kit.glowMat(0x5ce6ff, 0.5, 1.5, 0x1a1810);
+  const strip = kit.glowMat(0xff6fb0, 0.35, 1.2, 0x15140f);
 
   kit.box(island, 21, 0.04, 1.6, asphalt, 0, 0, 0, false);
   kit.box(island, 1.6, 0.038, 21, asphalt, 0, 0, 0, false);
@@ -390,13 +391,13 @@ export function makeArcs(kit: Kit, island: THREE.Group, points: Record<string, T
     ["sgsoft", "sahefa"],
   ];
   const lineMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0xd7c68a).multiplyScalar(1.4),
+    color: new THREE.Color(0xff6fb0).multiplyScalar(1.4),
     transparent: true,
     opacity: 0.22,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const orbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf3e2b0).multiplyScalar(1.3), toneMapped: true });
+  const orbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf4f1ff).multiplyScalar(1.3), toneMapped: true });
   lineMat.userData.keepColor = true;
   orbMat.userData.keepColor = true;
   const orbGeo = new THREE.SphereGeometry(0.045, 8, 6);
@@ -501,7 +502,7 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
   const shipHull = kit.mat(0x2a2f3a, 0.35, 0.7);
   const hullMesh = kit.ball(bal, 1, shipHull, 0, 0, 0, 28, false);
   hullMesh.scale.set(0.62, 0.62, 2.6);
-  const band = kit.glowMat(0xd7c68a, 0.8, 2.2, 0x14120c);
+  const band = kit.glowMat(0xff6fb0, 0.8, 2.2, 0x14120c);
   const bandMesh = kit.put(bal, new THREE.TorusGeometry(0.6, 0.018, 6, 40), band, 0, 0, 0.9, false);
   bandMesh.scale.set(1.04, 1.04, 1);
   kit.put(bal, new THREE.TorusGeometry(0.6, 0.018, 6, 40), band, 0, 0, -0.9, false).scale.set(1.04, 1.04, 1);

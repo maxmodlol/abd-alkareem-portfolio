@@ -210,7 +210,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   /* error checks read shader status back synchronously, which stalls the first frames */
   renderer.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.3;
+  renderer.toneMappingExposure = 1.5;
   /* no graphics card (software rendering, as in many test and remote machines): a still island that redraws when you move it */
   /* the poster images are shot on a machine without a graphics card; this flag (set by the capture
      script, never by the page) renders the full look there anyway */
@@ -235,12 +235,12 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 900);
-  scene.fog = new THREE.FogExp2(0x2a3349, 0.011);
+  scene.fog = new THREE.FogExp2(0xb59ad8, 0.007);
 
-  /* light rig: the last amber light of a sun just below the horizon, turning into cold moonlight, under a navy sky */
-  const hemi = new THREE.HemisphereLight(0x33405e, 0x0b0d12, 1.0);
+  /* light rig: a low rose sun under an indigo sky, turning into a cyan moon over a deep-sea night */
+  const hemi = new THREE.HemisphereLight(0xc4ccff, 0x3a2a55, 1.0);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffb070, 1.8);
+  const sun = new THREE.DirectionalLight(0xffd2b4, 1.8);
   sun.castShadow = !cheap;
   sun.shadow.mapSize.setScalar(high ? 2048 : 1024);
   sun.shadow.radius = 3;
@@ -253,7 +253,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02;
   scene.add(sun);
-  const fill = new THREE.DirectionalLight(0x6a7fb0, 0.35);
+  const fill = new THREE.DirectionalLight(0x7fd8ff, 0.5);
   fill.position.set(10, 8, 12);
   scene.add(fill);
 
@@ -263,7 +263,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   const envScene = new THREE.Scene();
   const envMesh = new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), createSkyMaterial());
   envScene.add(envMesh);
-  const glintMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc98a).multiplyScalar(1.6), side: THREE.DoubleSide });
+  const glintMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffb3d6).multiplyScalar(1.6), side: THREE.DoubleSide });
   const glintGeo = new THREE.PlaneGeometry(1, 1);
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * Math.PI * 2 + (i % 3) * 0.13;
@@ -399,10 +399,10 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   coinGeo.rotateX(Math.PI / 2);
   /* the collectibles are the one place gold is used at full strength */
   const coinMat = new THREE.MeshStandardMaterial({
-    color: 0xd7c68a,
+    color: 0xff6fb0,
     roughness: 0.25,
     metalness: 0.9,
-    emissive: 0x8a6f2e,
+    emissive: 0x7a2a58,
     emissiveIntensity: 0.7,
   });
   coinMat.userData.keepColor = true;
@@ -454,10 +454,10 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   const padGroup = new THREE.Group();
   padGroup.visible = false;
   island.add(padGroup);
-  const padGlow = kit.glowMat(0xffb45e, 1.6, 4, 0x1a140c);
-  const padTop = new THREE.MeshStandardMaterial({ color: 0x2a2e38, roughness: 0.35, metalness: 0.6, emissive: 0xffb45e, emissiveIntensity: 0.18 });
+  const padGlow = kit.glowMat(0x5ce6ff, 1.6, 4, 0x1a140c);
+  const padTop = new THREE.MeshStandardMaterial({ color: 0x2a2e38, roughness: 0.35, metalness: 0.6, emissive: 0x5ce6ff, emissiveIntensity: 0.18 });
   const padArrowMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0xffc98a).multiplyScalar(1.4),
+    color: new THREE.Color(0xffb3d6).multiplyScalar(1.4),
     transparent: true,
     opacity: 0.7,
     blending: THREE.AdditiveBlending,
@@ -493,7 +493,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
       a.add(b);
       arrows.push(a);
     }
-    kit.pointLight(g, 0xffb45e, 0.4, 1.4, 3, 0, 0.5, 0);
+    kit.pointLight(g, 0x5ce6ff, 0.4, 1.4, 3, 0, 0.5, 0);
     pads.push({ top, arrows, kick: 0 });
   });
 
@@ -550,7 +550,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
 
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(3.2, 0.035, 8, 96),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(0xd7c68a).multiplyScalar(2.0) }),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff6fb0).multiplyScalar(2.0) }),
   );
   ring.userData.keepColor = true;
   ring.rotation.x = Math.PI / 2;
@@ -566,7 +566,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
         break;
       case "double":
         particles.burst("spark", x, y + 0.3, z, null, 0.8);
-        particles.ring(x, y, z, 1.2, 0xf3e2b0);
+        particles.ring(x, y, z, 1.2, 0xf4f1ff);
         sfx.play("double");
         break;
       case "land":
@@ -589,7 +589,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
         break;
       case "pad": {
         particles.burst("pad", x, y + 0.2, z);
-        particles.ring(x, y, z, 2.6, 0xffb45e);
+        particles.ring(x, y, z, 2.6, 0x5ce6ff);
         sfx.play("pad");
         shake = Math.max(shake, 0.1);
         const p = pads[PADS.findIndex(([px, pz]) => px === x && pz === z)];
@@ -604,7 +604,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
         break;
       case "hit":
         particles.burst("hit", x, y, z);
-        particles.ring(x, 0, z, 1.8, 0xffb45e);
+        particles.ring(x, 0, z, 1.8, 0x5ce6ff);
         sfx.play("hit");
         shake = Math.max(shake, 0.4);
         hitStop = 0.14;
@@ -1054,12 +1054,12 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
   const sunDay = new THREE.Vector3(-0.78, 0.3, 0.55).normalize();
   const sunNight = new THREE.Vector3(-0.35, 0.8, 0.45).normalize();
   const sunDir = new THREE.Vector3();
-  const cSunDay = new THREE.Color(0xffa860);
-  const cSunNight = new THREE.Color(0x8296c8);
-  const hSkyDay = new THREE.Color(0x5b6a92);
-  const hSkyNight = new THREE.Color(0x2c3754);
-  const hGroundDay = new THREE.Color(0x1c1a17);
-  const hGroundNight = new THREE.Color(0x07080b);
+  const cSunDay = new THREE.Color(0xffd2b4);
+  const cSunNight = new THREE.Color(0x7fd8ff);
+  const hSkyDay = new THREE.Color(0xc4ccff);
+  const hSkyNight = new THREE.Color(0x3c4a9a);
+  const hGroundDay = new THREE.Color(0x5a3a66);
+  const hGroundNight = new THREE.Color(0x120c26);
   let raf = 0;
   let active = true;
   let fpsFrames = 0;
@@ -1157,15 +1157,15 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
     sunDir.lerpVectors(sunDay, sunNight, n).normalize();
     sun.position.copy(sunDir).multiplyScalar(34);
     sun.color.lerpColors(cSunDay, cSunNight, n);
-    sun.intensity = lerp(3.0, 1.1, n);
+    sun.intensity = lerp(3.2, 1.2, n);
     hemi.color.lerpColors(hSkyDay, hSkyNight, n);
     hemi.groundColor.lerpColors(hGroundDay, hGroundNight, n);
-    hemi.intensity = lerp(1.7, 1.1, n);
-    fill.intensity = lerp(0.35, 0.2, n);
-    scene.environmentIntensity = lerp(0.8, 0.45, n);
+    hemi.intensity = lerp(2.0, 1.25, n);
+    fill.intensity = lerp(0.5, 0.35, n);
+    scene.environmentIntensity = lerp(0.9, 0.55, n);
     sky.update(n, sunDir, camera.position);
     (scene.fog as THREE.FogExp2).color.copy(sky.fog);
-    (scene.fog as THREE.FogExp2).density = 0.0105 + n * 0.003;
+    (scene.fog as THREE.FogExp2).density = 0.0062 + n * 0.0025;
     fx?.setNight(n);
     sea.update(t, n);
 
@@ -1244,7 +1244,7 @@ export async function createCityScene(opts: CityOptions): Promise<CityScene | nu
           g.visible = false;
           gemTotal += 1;
           particles.burst("gem", gx, g.position.y, gz);
-          particles.ring(gx, explorer.py, gz, 2.2, 0xc4d0f2);
+          particles.ring(gx, explorer.py, gz, 2.2, 0xa898ff);
           sfx.play("gem");
           shake = Math.max(shake, 0.12);
           playH?.onGem(gemTotal, gemPts.length);

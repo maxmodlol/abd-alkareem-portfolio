@@ -6,14 +6,15 @@ import { jobs, person, skills } from "@/lib/content";
 import { projects, type Project } from "@/lib/projects";
 
 import type { BuildingId, CityScene, Quality } from "./city-scene";
+import { applyMix, Bloom, Count, Kinetic, MIXES } from "./bloom";
 import { Dialog, HoldButton, Stick } from "./hud";
 
-/* gold flecks for the end-of-game card */
+/* flecks of the light family for the end-of-game card */
 const CONFETTI = Array.from({ length: 24 }, (_, i) => ({
   left: (i * 37) % 100,
   delay: ((i * 53) % 100) / 100,
   dur: 2.4 + ((i * 29) % 10) / 8,
-  color: ["#d7c68a", "#f3e2b0", "#9a8762", "#777f91"][i % 4],
+  color: ["#ff6fb0", "#5ce6ff", "#a898ff", "#f4f1ff"][i % 4],
 }));
 
 /* the order the guided walk visits the buildings in (WALK_ROUTE in city-scene.ts) */
@@ -24,6 +25,9 @@ type Tab = "work" | "exp" | "skills" | "contact";
 type Stage = "idle" | "loading" | "live" | "failed" | "nogl";
 type Intent = "explore" | "play" | "tour";
 type QualityPref = Quality | "auto";
+
+/* what the landing marquee runs through */
+const STACK = ["SaaS platforms", "CRMs", "APIs", "Mobile apps", "Next.js", "NestJS", "Spring Boot", "Flutter", "Integrations"];
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "work", label: "Work" },
@@ -132,6 +136,10 @@ export function CityApp() {
   const [winSeen, setWinSeen] = useState(false);
   const [touch, setTouch] = useState(false);
   const [narrowUi, setNarrowUi] = useState(false);
+  /* motion: on unless the system asks for less; the visitor can switch it either way */
+  const [motion, setMotion] = useState(true);
+  const [mix, setMix] = useState(0);
+  const [dots, setDots] = useState(0);
 
   const miniRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -283,6 +291,11 @@ export function CityApp() {
     setMuted(readPref("city-muted", ["0", "1"] as const, "0") === "1");
     setQualityPref(readPref<QualityPref>("city-quality", ["auto", "high", "balanced", "low"] as const, "auto"));
     setNight(readPref("city-mood", ["dusk", "night"] as const, "dusk") === "night");
+    const lessMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setMotion(readPref("city-motion", ["on", "off"] as const, lessMotion ? "off" : "on") === "on");
+    const m = Number(readPref("city-mix", ["0", "1", "2", "3"] as const, "0"));
+    setMix(m);
+    if (m) applyMix(m);
     const coarse = window.matchMedia("(pointer: coarse)");
     const narrow = window.matchMedia("(max-width: 759px)");
     const sync = () => {
@@ -303,6 +316,34 @@ export function CityApp() {
     setMuted(m);
     writePref("city-muted", m ? "1" : "0");
   };
+  const motionRef = useRef(motion);
+  motionRef.current = motion;
+  const toggleMotion = () => {
+    const m = !motion;
+    setMotion(m);
+    writePref("city-motion", m ? "on" : "off");
+  };
+  const doMix = useCallback(() => {
+    setMix((v) => {
+      const n = (v + 1) % MIXES.length;
+      applyMix(n);
+      writePref("city-mix", String(n));
+      return n;
+    });
+  }, []);
+  /* M mixes the colours while the landing screen is up, as long as the visitor is not typing */
+  useEffect(() => {
+    if (stage === "live") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyM" || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      doMix();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [stage, doMix]);
+
   const toggleNight = () => {
     const n = !night;
     setNight(n);
@@ -354,7 +395,7 @@ export function CityApp() {
       .then(async ({ createCityScene }) => {
         if (cancelled) return;
         lastStep = performance.now();
-        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches || !motionRef.current;
         const scene = await createCityScene({
           canvas,
           tagEls: tagRefs.current,
@@ -581,7 +622,7 @@ export function CityApp() {
 
   return (
     <div
-      className={`city stage-${stage}${playing ? " playing" : ""}${touring ? " touring" : ""}${selected ? " sel" : ""}${
+      className={`city stage-${stage}${motion ? "" : " still"}${playing ? " playing" : ""}${touring ? " touring" : ""}${selected ? " sel" : ""}${
         view !== "home" ? " paneled" : ""
       }`}
     >
@@ -595,21 +636,53 @@ export function CityApp() {
 
       {/* ---------- landing ---------- */}
       {!live ? (
-        <section className="gate" aria-labelledby="gate-title">
+        <section
+          className="gate"
+          aria-labelledby="gate-title"
+          onClick={(e) => {
+            /* a click on the open water, not on a control, mixes the colours */
+            if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("gate-inner")) doMix();
+          }}
+        >
+          <Bloom run={motion} mix={mix} onCount={setDots} />
+          <dl className="readout" aria-label="About this city">
+            <div>
+              <dt>Buildings</dt>
+              <dd className="mono">
+                <Count to={projects.length} still={!motion} dur={1200} />
+              </dd>
+            </div>
+            <div>
+              <dt>Lights</dt>
+              <dd className="mono">
+                <Count to={dots} still={!motion} />
+              </dd>
+            </div>
+            <div>
+              <dt>Mix</dt>
+              <dd className="mono" aria-live="polite">
+                {MIXES[mix].name}
+              </dd>
+            </div>
+          </dl>
           <div className="gate-inner">
-            <p className="eyebrow">Full-stack software engineer · Palestine · remote</p>
+            <p className="eyebrow">
+              <span className="pill">Full-stack software engineer</span> Palestine · remote
+            </p>
             <h1 id="gate-title" className="wordmark">
-              <span>Abd Alkareem</span>
-              <span>Abu-Alsoud</span>
+              <Kinetic text="Abd Alkareem" />
+              <Kinetic text="Abu-Alsoud" className="outline" delay={10} />
             </h1>
-            <p className="gate-line">Products are cities. I build the plumbing.</p>
+            <p className="gate-line">
+              Products are cities. <em>I build the plumbing.</em>
+            </p>
             <p className="gate-lede">
               Three years shipping SaaS platforms, CRMs, APIs and mobile apps. Every building in this city is one of them.
             </p>
 
             {stage === "idle" ? (
               <div className="gate-actions">
-                <button type="button" className="btn gold" onClick={() => enter("explore")} {...warm}>
+                <button type="button" className="btn primary" onClick={() => enter("explore")} {...warm}>
                   Enter the city
                 </button>
                 <button type="button" className="btn" onClick={() => openTab("work")}>
@@ -662,7 +735,7 @@ export function CityApp() {
               <div className="load err" role="alert">
                 <p>{failNote || "Something went wrong while building the city."}</p>
                 <div className="gate-actions">
-                  <button type="button" className="btn gold" onClick={() => enter(intentRef.current)}>
+                  <button type="button" className="btn primary" onClick={() => enter(intentRef.current)}>
                     Try again
                   </button>
                   <button type="button" className="btn" onClick={() => openTab("work")}>
@@ -679,12 +752,38 @@ export function CityApp() {
                   still here.
                 </p>
                 <div className="gate-actions">
-                  <button type="button" className="btn gold" onClick={() => openTab("work")}>
+                  <button type="button" className="btn primary" onClick={() => openTab("work")}>
                     Browse the work
                   </button>
                 </div>
               </div>
             ) : null}
+          </div>
+          <div className="gate-hint">
+            <button type="button" className="link" onClick={doMix}>
+              {touch ? "Tap to mix the colours" : (
+                <>
+                  Click or press <kbd>M</kbd> to mix
+                </>
+              )}
+            </button>
+            <button type="button" className="link" aria-pressed={motion} onClick={toggleMotion}>
+              Motion {motion ? "on" : "off"}
+            </button>
+          </div>
+          <div className="marquee" aria-hidden="true">
+            <div>
+              {[0, 1].map((k) => (
+                <span key={k}>
+                  {STACK.map((w) => (
+                    <span key={w}>
+                      {w}
+                      <i>✦</i>
+                    </span>
+                  ))}
+                </span>
+              ))}
+            </div>
           </div>
         </section>
       ) : null}
@@ -816,7 +915,7 @@ export function CityApp() {
           </p>
           <div className="row">
             <button
-              className="btn gold"
+              className="btn primary"
               type="button"
               onClick={() => {
                 setWinSeen(true);
@@ -897,8 +996,9 @@ export function CityApp() {
           Abd Alkareem <span>Abu-Alsoud</span>
         </div>
         <nav aria-label="Sections">
-          {tabs.map((t) => (
+          {tabs.map((t, i) => (
             <button key={t.id} type="button" aria-pressed={activeTab === t.id} onClick={() => openTab(t.id)}>
+              <small aria-hidden="true">0{i + 1}</small>
               {t.label}
             </button>
           ))}
@@ -923,7 +1023,7 @@ export function CityApp() {
               </button>
             </>
           ) : (
-            <button type="button" className="gold" onClick={() => enter("explore")} disabled={loading} {...warm}>
+            <button type="button" className="primary" onClick={() => enter("explore")} disabled={loading} {...warm}>
               {loading ? "Building…" : "Enter the city"}
             </button>
           )}
@@ -991,7 +1091,7 @@ export function CityApp() {
                   ))}
                 </div>
                 <div className="row">
-                  <button className="btn gold" type="button" onClick={() => choose(next.id)}>
+                  <button className="btn primary" type="button" onClick={() => choose(next.id)}>
                     Next: {next.name}
                   </button>
                   <button className="btn" type="button" onClick={() => openTab("contact")}>
@@ -1041,7 +1141,7 @@ export function CityApp() {
               {person.email}
             </span>
             <div className="row">
-              <button className="btn gold" type="button" onClick={copyEmail}>
+              <button className="btn primary" type="button" onClick={copyEmail}>
                 {copied ? "Copied" : "Copy email"}
               </button>
               <a className="btn" href={person.linkedin}>
@@ -1071,7 +1171,7 @@ export function CityApp() {
             <h2>Swipe to visit each building</h2>
             <p>Or tap a building. Drag the city to look around, pinch to zoom.</p>
             <div className="row">
-              <button className="btn gold" type="button" onClick={playing ? stopPlay : () => enter("play")}>
+              <button className="btn primary" type="button" onClick={playing ? stopPlay : () => enter("play")}>
                 {playing ? "Exit game" : "Play the city"}
               </button>
               <button className="btn" type="button" onClick={touring ? stopTour : () => enter("tour")}>
@@ -1112,7 +1212,7 @@ export function CityApp() {
       {menu === "pause" ? (
         <Dialog title="Paused" labelId="pause-title" onClose={() => setMenu("none")}>
           <div className="menu-actions">
-            <button type="button" className="btn gold" data-autofocus onClick={() => setMenu("none")}>
+            <button type="button" className="btn primary" data-autofocus onClick={() => setMenu("none")}>
               Resume
             </button>
             <button type="button" className="btn" onClick={startPlayNow}>
@@ -1176,10 +1276,13 @@ export function CityApp() {
           <button type="button" className="toggle" aria-pressed={night} onClick={toggleNight}>
             Mood: {night ? "night" : "dusk"}
           </button>
+          <button type="button" className="toggle" aria-pressed={motion} onClick={toggleMotion}>
+            Motion {motion ? "on" : "off"}
+          </button>
           {qualityChoices}
           <p className="fps mono">{fps ? `${fps} fps · ${QUALITY_LABEL[qualityUsed]} preset` : ""}</p>
           <div className="menu-actions">
-            <button type="button" className="btn gold" onClick={() => setMenu("none")}>
+            <button type="button" className="btn primary" onClick={() => setMenu("none")}>
               Done
             </button>
             <button type="button" className="btn" onClick={leaveCity}>

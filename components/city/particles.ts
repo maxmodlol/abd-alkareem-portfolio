@@ -17,12 +17,12 @@ type Spec = {
 const SPECS: Record<Burst, Spec> = {
   dust: { n: 5, color: [0x6a7080, 0x8a90a0], speed: [0.3, 0.8], up: [0.2, 0.6], life: [0.35, 0.6], size: [0.1, 0.2], grav: -0.6, drag: 3, glow: false },
   land: { n: 16, color: [0x6a7080, 0x9aa1b0], speed: [1.2, 2.4], up: [0.2, 0.8], life: [0.4, 0.75], size: [0.12, 0.26], grav: -0.4, drag: 4, glow: false },
-  trail: { n: 2, color: [0xd7c68a, 0xffd59a], speed: [0.05, 0.25], up: [0.1, 0.4], life: [0.25, 0.45], size: [0.06, 0.12], grav: 0, drag: 2, glow: true },
-  spark: { n: 14, color: [0xf3e2b0, 0xd7c68a, 0xffffff], speed: [1.5, 3.2], up: [1.0, 3.0], life: [0.35, 0.7], size: [0.06, 0.13], grav: 7, drag: 1.5, glow: true },
-  gem: { n: 40, color: [0xe8eefc, 0xc4d0f2, 0xf3e2b0, 0xd7c68a], speed: [2, 5], up: [1, 4], life: [0.6, 1.2], size: [0.08, 0.18], grav: 4, drag: 1.2, glow: true },
-  pad: { n: 26, color: [0xffb45e, 0xd7c68a, 0xf3e2b0], speed: [0.6, 2.2], up: [3, 7], life: [0.5, 0.9], size: [0.07, 0.16], grav: 6, drag: 1, glow: true },
-  hit: { n: 18, color: [0xf3e2b0, 0xffb45e, 0xffffff], speed: [2, 4], up: [1, 3], life: [0.3, 0.6], size: [0.08, 0.16], grav: 6, drag: 2, glow: true },
-  splash: { n: 20, color: [0x8a93a8, 0xc4d0f2], speed: [1, 2.5], up: [2, 4.5], life: [0.5, 0.9], size: [0.08, 0.16], grav: 9, drag: 1, glow: false },
+  trail: { n: 2, color: [0xff6fb0, 0xa8f3ff], speed: [0.05, 0.25], up: [0.1, 0.4], life: [0.25, 0.45], size: [0.06, 0.12], grav: 0, drag: 2, glow: true },
+  spark: { n: 14, color: [0xf4f1ff, 0xff6fb0, 0xffffff], speed: [1.5, 3.2], up: [1.0, 3.0], life: [0.35, 0.7], size: [0.06, 0.13], grav: 7, drag: 1.5, glow: true },
+  gem: { n: 40, color: [0xe8eefc, 0xa898ff, 0xf4f1ff, 0xff6fb0], speed: [2, 5], up: [1, 4], life: [0.6, 1.2], size: [0.08, 0.18], grav: 4, drag: 1.2, glow: true },
+  pad: { n: 26, color: [0x5ce6ff, 0xff6fb0, 0xf4f1ff], speed: [0.6, 2.2], up: [3, 7], life: [0.5, 0.9], size: [0.07, 0.16], grav: 6, drag: 1, glow: true },
+  hit: { n: 18, color: [0xf4f1ff, 0x5ce6ff, 0xffffff], speed: [2, 4], up: [1, 3], life: [0.3, 0.6], size: [0.08, 0.16], grav: 6, drag: 2, glow: true },
+  splash: { n: 20, color: [0x8a93a8, 0xa898ff], speed: [1, 2.5], up: [2, 4.5], life: [0.5, 0.9], size: [0.08, 0.16], grav: 9, drag: 1, glow: false },
 };
 
 /**

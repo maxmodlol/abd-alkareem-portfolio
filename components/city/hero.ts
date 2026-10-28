@@ -385,7 +385,7 @@ export class Hero {
       m.userData.keepColor = true;
       return m;
     };
-    const hoodie = own(0xc4a45c, 0.8);
+    const hoodie = own(0xff6fb0, 0.8);
     const hoodDark = own(0x8f753d, 0.85);
     const pants = own(0x1c2029, 0.9);
     const skin = own(0xd5a074, 0.75);
@@ -393,7 +393,7 @@ export class Hero {
     const shoe = own(0xe6e2d8, 0.6);
     const sole = own(0x15181f, 0.6);
     const bag = own(0x2a2f3a, 0.8);
-    const lace = own(0xd7c68a, 0.7);
+    const lace = own(0xff6fb0, 0.7);
 
     const cap = (r: number, len: number, m: THREE.Material, parent: THREE.Object3D, y: number, x = 0, z = 0) => {
       const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), m);
@@ -438,7 +438,7 @@ export class Hero {
     const hood = cap(0.07, 0.1, hoodDark, this.spine, 0.28, 0, -0.06);
     hood.rotation.z = Math.PI / 2;
     kit.box(this.spine, 0.17, 0.2, 0.08, bag, 0, 0.06, -0.12);
-    kit.box(this.spine, 0.12, 0.07, 0.02, own(0xd7c68a, 0.6), 0, 0.09, -0.165, false);
+    kit.box(this.spine, 0.12, 0.07, 0.02, own(0xff6fb0, 0.6), 0, 0.09, -0.165, false);
 
     /* light wings on his back: they unfold while he glides */
     this.wings = new THREE.Group();
