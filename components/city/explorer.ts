@@ -116,7 +116,7 @@ export class Explorer {
     this.ring = new THREE.Mesh(
       new THREE.RingGeometry(0.26, 0.33, 40),
       new THREE.MeshBasicMaterial({
-        color: 0xf25c54,
+        color: 0xd7c68a,
         transparent: true,
         opacity: 0.55,
         blending: THREE.AdditiveBlending,
@@ -188,6 +188,29 @@ export class Explorer {
     this.ring.visible = true;
     const to = this.route[0].at;
     this.heading = Math.atan2(to[0] - this.x, to[1] - this.z);
+    this.place();
+  }
+
+  /** Tour: leave the current stop now, or walk straight on to the next one. */
+  skip(): void {
+    if (this.state !== "walk" && this.state !== "dwell") return;
+    const here = this.route[this.next];
+    let i = this.next;
+    if (this.state === "dwell" && here.stop) {
+      this.events?.onLeave(here.stop.id);
+      i = (i + 1) % this.route.length;
+    }
+    /* the next point with a stop, reached from the point before it so he still walks the last metres */
+    for (let k = 0; k < this.route.length && !this.route[i].stop; k++) i = (i + 1) % this.route.length;
+    const prev = this.route[(i - 1 + this.route.length) % this.route.length].at;
+    const to = this.route[i].at;
+    this.x = prev[0] + (to[0] - prev[0]) * 0.75;
+    this.z = prev[1] + (to[1] - prev[1]) * 0.75;
+    this.next = i;
+    this.state = "walk";
+    this.hero.state = "walk";
+    this.heading = Math.atan2(to[0] - this.x, to[1] - this.z);
+    this.hero.snap();
     this.place();
   }
 

@@ -2,11 +2,23 @@ import * as THREE from "three";
 
 import type { Project } from "@/lib/projects";
 
+import { gradeCss } from "./palette";
+
 export type BuildingId = Project["id"];
 export type Anim = (t: number, dt: number) => void;
 export type Mat = THREE.Material | THREE.Material[] | number;
 
 export const FONT = "'Trebuchet MS', 'Segoe UI', system-ui, Arial, sans-serif";
+
+/** The site's display face for text drawn into the scene, falling back to FONT before it has loaded. */
+export function displayFont(): string {
+  try {
+    const v = getComputedStyle(document.body).getPropertyValue("--font-display").trim();
+    return v ? `${v}, ${FONT}` : FONT;
+  } catch {
+    return FONT;
+  }
+}
 
 /** Small deterministic random generator so the city looks the same on every load. */
 export function rng(seed: number): () => number {
@@ -62,7 +74,7 @@ export class Kit {
   lightsOn = true;
 
   private cache = new Map<string, THREE.MeshStandardMaterial>();
-  private lampGeo = new THREE.SphereGeometry(0.1, 12, 10);
+  private lampGeo = new THREE.SphereGeometry(0.06, 12, 10);
   private lampMat: THREE.MeshStandardMaterial | null = null;
 
   mat(color: number, rough = 0.78, metal = 0, flat = false): THREE.MeshStandardMaterial {
@@ -194,65 +206,63 @@ export class Kit {
     const cw = 28;
     const ch = 32;
     const R = rng(o.seed);
-    const litChance = o.lit ?? 0.55;
+    /* fewer, warmer windows: an inhabited city at night, not an office block with every light on */
+    const litChance = (o.lit ?? 0.55) * 0.75;
     const cells: (string | null)[] = [];
-    const warm = ["#ffd9a0", "#ffe9c4", "#ffc27a", "#ffeacc", "#cfe8ff"];
+    const warm = ["#ffd9a0", "#ffe3b8", "#ffc27a", "#f6dca6", "#ffd9a0", "#d9e2ff"];
     for (let i = 0; i < o.cols * o.rows; i++) {
       cells.push(R() < litChance ? warm[Math.floor(R() * warm.length)] : null);
     }
     const W = o.cols * cw;
     const H = o.rows * ch;
+    const wall = gradeCss(base);
+    const tintGlass = new THREE.Color(gradeCss(o.glass ?? "#8ec3df"));
+    const glassTop = `#${new THREE.Color(0x2b3448).lerp(tintGlass, 0.25).getHexString()}`;
     const map = canvasTex(W, H, (g) => {
-      g.fillStyle = base;
+      g.fillStyle = wall;
       g.fillRect(0, 0, W, H);
       for (let r = 0; r < o.rows; r++) {
         for (let c = 0; c < o.cols; c++) {
           const x = c * cw;
           const y = r * ch;
-          const grd = g.createLinearGradient(0, y + 5, 0, y + ch - 5);
-          grd.addColorStop(0, o.glass ?? "#8ec3df");
-          grd.addColorStop(1, "#2a5170");
+          /* dark glass that only shows colour where it catches the sky */
+          const grd = g.createLinearGradient(0, y + 4, 0, y + ch - 4);
+          grd.addColorStop(0, glassTop);
+          grd.addColorStop(1, "#090c13");
           g.fillStyle = grd;
-          g.fillRect(x + 5, y + 5, cw - 10, ch - 10);
-          g.fillStyle = base;
-          g.fillRect(x + cw / 2 - 0.75, y + 5, 1.5, ch - 10);
-          g.fillStyle = "rgba(0,0,0,0.16)";
-          g.fillRect(x + 4, y + ch - 5, cw - 8, 2);
-          /* a sill under each window and a soft reflection streak across the glass */
-          g.fillStyle = "rgba(255,255,255,0.35)";
-          g.fillRect(x + 3, y + ch - 4, cw - 6, 1.5);
-          g.fillStyle = "rgba(255,255,255,0.12)";
+          g.fillRect(x + 3, y + 4, cw - 6, ch - 8);
+          /* a slim mullion and a brushed-metal spandrel between floors */
+          g.fillStyle = wall;
+          g.fillRect(x + cw / 2 - 0.5, y + 4, 1, ch - 8);
+          g.fillStyle = "rgba(215,198,138,0.10)";
+          g.fillRect(x, y + ch - 3, cw, 1);
+          g.fillStyle = "rgba(255,255,255,0.05)";
           g.beginPath();
-          g.moveTo(x + 5, y + ch - 12);
-          g.lineTo(x + 5, y + ch - 7);
-          g.lineTo(x + cw - 5, y + 9);
-          g.lineTo(x + cw - 5, y + 5);
+          g.moveTo(x + 3, y + ch - 10);
+          g.lineTo(x + 3, y + ch - 6);
+          g.lineTo(x + cw - 3, y + 8);
+          g.lineTo(x + cw - 3, y + 4);
           g.closePath();
           g.fill();
         }
       }
-      /* weathering: grime collects towards the ground, with a little streaking */
-      const grime = g.createLinearGradient(0, 0, 0, H);
-      grime.addColorStop(0, "rgba(40,30,20,0)");
-      grime.addColorStop(0.75, "rgba(40,30,20,0.04)");
-      grime.addColorStop(1, "rgba(40,30,20,0.16)");
-      g.fillStyle = grime;
+      /* a faint wash, darker towards the street */
+      const wash = g.createLinearGradient(0, 0, 0, H);
+      wash.addColorStop(0, "rgba(9,11,16,0)");
+      wash.addColorStop(1, "rgba(9,11,16,0.22)");
+      g.fillStyle = wash;
       g.fillRect(0, 0, W, H);
-      for (let i = 0; i < o.cols * 2; i++) {
-        g.fillStyle = `rgba(30,25,20,${0.02 + R() * 0.04})`;
-        g.fillRect(R() * W, R() * H * 0.5, 1 + R() * 2, H * (0.2 + R() * 0.5));
-      }
     });
-    /* glass is smooth and a little metallic so it mirrors the sky; walls are matte (G roughness, B metalness) */
+    /* glass is smooth and metallic so it mirrors the sky; the panels between are brushed composite (G roughness, B metalness) */
     const rm = canvasTex(
       W,
       H,
       (g) => {
-        g.fillStyle = "rgb(0,225,0)";
+        g.fillStyle = "rgb(0,150,120)";
         g.fillRect(0, 0, W, H);
-        g.fillStyle = "rgb(0,30,170)";
+        g.fillStyle = "rgb(0,26,190)";
         for (let r = 0; r < o.rows; r++) {
-          for (let c = 0; c < o.cols; c++) g.fillRect(c * cw + 5, r * ch + 5, cw - 10, ch - 10);
+          for (let c = 0; c < o.cols; c++) g.fillRect(c * cw + 3, r * ch + 4, cw - 6, ch - 8);
         }
       },
       false,
@@ -264,12 +274,16 @@ export class Kit {
         for (let c = 0; c < o.cols; c++) {
           const col = cells[r * o.cols + c];
           if (!col) continue;
-          g.fillStyle = col;
-          g.fillRect(c * cw + 5, r * ch + 5, cw - 10, ch - 10);
+          /* light falls off towards the bottom of the pane, like a lamp inside the room */
+          const grd = g.createLinearGradient(0, r * ch + 4, 0, r * ch + ch - 4);
+          grd.addColorStop(0, col);
+          grd.addColorStop(1, "#3a2a14");
+          g.fillStyle = grd;
+          g.fillRect(c * cw + 3, r * ch + 4, cw - 6, ch - 8);
         }
       }
     });
-    const day = o.day ?? 0.18;
+    const day = o.day ?? 0.35;
     const night = o.night ?? 2.6;
     const m = new THREE.MeshStandardMaterial({
       map,
@@ -280,7 +294,7 @@ export class Kit {
       metalness: 1,
       roughnessMap: rm,
       metalnessMap: rm,
-      envMapIntensity: 1.3,
+      envMapIntensity: 1.5,
     });
     this.glows.push({ m, day, night });
     return m;
@@ -298,22 +312,36 @@ export class Kit {
     h: number,
     o: { fg: string; bg: string; day?: number; night?: number; radius?: number },
   ): THREE.Mesh {
+    /* every sign is set in the house style: a dark plate, a hairline of gold and champagne capitals */
+    void o.fg;
+    void o.bg;
     const pxW = 512;
     const pxH = Math.max(64, Math.round((512 * h) / w));
     const map = canvasTex(pxW, pxH, (g, cw, chh) => {
-      g.fillStyle = o.bg;
-      roundRectPath(g, 2, 2, cw - 4, chh - 4, (o.radius ?? 0.18) * chh);
+      const r = (o.radius ?? 0.12) * chh;
+      g.fillStyle = "#0b0e16";
+      roundRectPath(g, 2, 2, cw - 4, chh - 4, r);
       g.fill();
-      g.fillStyle = o.fg;
+      g.strokeStyle = "rgba(215,198,138,0.75)";
+      g.lineWidth = Math.max(2, chh * 0.04);
+      roundRectPath(g, chh * 0.08, chh * 0.08, cw - chh * 0.16, chh - chh * 0.16, r * 0.7);
+      g.stroke();
+      g.fillStyle = "#e9d9a6";
       g.textAlign = "center";
       g.textBaseline = "middle";
-      let size = chh * 0.62;
-      g.font = `800 ${size}px ${FONT}`;
-      while (g.measureText(text).width > cw * 0.88 && size > 10) {
+      const label = text.toUpperCase();
+      const spaced = g as CanvasRenderingContext2D & { letterSpacing?: string };
+      let size = chh * 0.46;
+      const set = () => {
+        g.font = `500 ${size}px ${displayFont()}`;
+        spaced.letterSpacing = `${Math.round(size * 0.22)}px`;
+      };
+      set();
+      while (g.measureText(label).width > cw * 0.82 && size > 10) {
         size -= 2;
-        g.font = `800 ${size}px ${FONT}`;
+        set();
       }
-      g.fillText(text, cw / 2, chh / 2 + chh * 0.03);
+      g.fillText(label, cw / 2, chh / 2 + chh * 0.03);
     });
     const day = o.day ?? 0.35;
     const night = o.night ?? 1.8;
@@ -332,7 +360,7 @@ export class Kit {
 
   /** A street lamp. The head brightens at night. */
   lamp(parent: THREE.Object3D, x: number, z: number, h = 1.6): void {
-    if (!this.lampMat) this.lampMat = this.glowMat(0xffd9a0, 0.6, 3.6);
+    if (!this.lampMat) this.lampMat = this.glowMat(0xffd9a0, 0.9, 1.9);
     this.cyl(parent, 0.035, 0.055, h, 0x25323b, x, 0, z, 8);
     this.box(parent, 0.22, 0.04, 0.04, 0x25323b, x, h - 0.02, z, false);
     this.put(parent, this.lampGeo, this.lampMat, x, h + 0.04, z, false);

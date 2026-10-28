@@ -379,15 +379,21 @@ export class Hero {
   private wb = zero();
 
   constructor(kit: Kit) {
-    const hoodie = kit.mat(0xe3a62a, 0.8);
-    const hoodDark = kit.mat(0xc98c1c, 0.85);
-    const pants = kit.mat(0x23323d, 0.9);
-    const skin = kit.mat(0xd5a074, 0.75);
-    const hair = kit.mat(0x1b1511, 0.95);
-    const shoe = kit.mat(0xfff4e3, 0.6);
-    const sole = kit.mat(0xf25c54, 0.6);
-    const bag = kit.mat(0x33475b, 0.8);
-    const lace = kit.mat(0xfff4e3, 0.7);
+    /* his own materials, outside the palette grade: a muted gold hoodie keeps him the brightest thing on the street */
+    const own = (color: number, roughness: number) => {
+      const m = new THREE.MeshStandardMaterial({ color, roughness });
+      m.userData.keepColor = true;
+      return m;
+    };
+    const hoodie = own(0xc4a45c, 0.8);
+    const hoodDark = own(0x8f753d, 0.85);
+    const pants = own(0x1c2029, 0.9);
+    const skin = own(0xd5a074, 0.75);
+    const hair = own(0x1b1511, 0.95);
+    const shoe = own(0xe6e2d8, 0.6);
+    const sole = own(0x15181f, 0.6);
+    const bag = own(0x2a2f3a, 0.8);
+    const lace = own(0xd7c68a, 0.7);
 
     const cap = (r: number, len: number, m: THREE.Material, parent: THREE.Object3D, y: number, x = 0, z = 0) => {
       const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), m);
@@ -432,7 +438,7 @@ export class Hero {
     const hood = cap(0.07, 0.1, hoodDark, this.spine, 0.28, 0, -0.06);
     hood.rotation.z = Math.PI / 2;
     kit.box(this.spine, 0.17, 0.2, 0.08, bag, 0, 0.06, -0.12);
-    kit.box(this.spine, 0.12, 0.07, 0.02, kit.mat(0xf25c54, 0.6), 0, 0.09, -0.165, false);
+    kit.box(this.spine, 0.12, 0.07, 0.02, own(0xd7c68a, 0.6), 0, 0.09, -0.165, false);
 
     /* light wings on his back: they unfold while he glides */
     this.wings = new THREE.Group();

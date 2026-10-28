@@ -19,15 +19,15 @@ export type Fx = {
   dispose: () => void;
 };
 
-/** Film look: bloom, tilt-shift softness at the top and bottom, a touch of warmth, vignette and grain. */
+/** Film look: bloom, tilt-shift softness at the top and bottom, a navy-and-champagne split tone, vignette and grain. */
 const GRADE = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
     uTime: { value: 0 },
     uRes: { value: new THREE.Vector2(1, 1) },
-    uVig: { value: 0.28 },
-    uGrain: { value: 0.015 },
-    uAb: { value: 0.0006 },
+    uVig: { value: 0.34 },
+    uGrain: { value: 0.012 },
+    uAb: { value: 0.00025 },
     uTilt: { value: 1 },
   },
   vertexShader: `
@@ -59,11 +59,13 @@ const GRADE = {
       float ab = uAb * dot(c, c) * 4.0;
       col.r = mix(col.r, texture2D(tDiffuse, vUv + c * ab * 6.0).r, 1.0 - band);
       col.b = mix(col.b, texture2D(tDiffuse, vUv - c * ab * 6.0).b, 1.0 - band);
+      /* split tone: shadows sink towards midnight navy, highlights warm towards champagne */
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(col, col * vec3(1.02, 1.0, 0.98), smoothstep(0.45, 1.0, l));
-      col = mix(col, col * vec3(0.9, 1.0, 1.1), 1.0 - smoothstep(0.0, 0.45, l));
-      col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 1.14);
-      col = (col - 0.5) * 1.06 + 0.5;
+      col = mix(col, col * vec3(1.06, 1.0, 0.86), smoothstep(0.35, 1.0, l));
+      col = mix(col, col * vec3(0.9, 0.96, 1.14), 1.0 - smoothstep(0.0, 0.35, l));
+      col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 0.92);
+      col = (col - 0.5) * 1.07 + 0.5;
+      col = max(col, vec3(0.0));
       float d = length(c * vec2(1.0, 0.92));
       col *= mix(1.0, smoothstep(0.88, 0.25, d), uVig);
       col += (hash(vUv * uRes + fract(uTime) * 91.0) - 0.5) * uGrain;
@@ -89,7 +91,7 @@ export function createFx(
     composer.setPixelRatio(pr);
     composer.setSize(size.x, size.y);
     const renderPass = new RenderPass(scene, camera);
-    const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.3, 0.5, 0.92);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.32, 0.55, 0.95);
     const output = new OutputPass();
     const grade = new ShaderPass({
       uniforms: THREE.UniformsUtils.clone(GRADE.uniforms),
@@ -172,9 +174,9 @@ export function createFx(
         apply();
       },
       setNight(n) {
-        /* daylight is bright everywhere, so only real lights bloom; at night the windows and lamps do */
-        bloom.strength = 0.14 + n * 0.41;
-        bloom.threshold = 1.6 - n * 0.74;
+        /* the city is dark at every hour, so the windows, lamps and gold lines are what bloom */
+        bloom.strength = 0.32 + n * 0.22;
+        bloom.threshold = 0.95 - n * 0.15;
       },
       dispose() {
         renderPass.dispose();

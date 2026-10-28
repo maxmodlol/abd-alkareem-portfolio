@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fragment_Mono, Gabarito, Hanken_Grotesk } from "next/font/google";
+import { Fragment_Mono, Hanken_Grotesk, Jost } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -7,10 +7,12 @@ import { getSiteUrl } from "@/lib/site";
 
 import "./globals.css";
 
-const gabarito = Gabarito({
-  variable: "--font-gabarito",
+/* Jost, a Futura revival, set light and widely tracked: the type of every film that imagined the future */
+const jost = Jost({
+  variable: "--font-jost",
   subsets: ["latin"],
   display: "swap",
+  weight: ["300", "400", "500"],
 });
 
 const hanken = Hanken_Grotesk({
@@ -78,8 +80,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1f8fc4",
-  colorScheme: "light",
+  themeColor: "#090b10",
+  colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -92,7 +94,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${gabarito.variable} ${hanken.variable} ${fragmentMono.variable}`}>
+      <body className={`${jost.variable} ${hanken.variable} ${fragmentMono.variable}`}>
         {children}
         <Analytics />
         <SpeedInsights />

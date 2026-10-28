@@ -30,8 +30,9 @@ type Walker = {
 };
 
 const SKIN = [0xf3d2b3, 0xe0b189, 0xc68b5c, 0x9a6a45, 0x6f4a31];
-const SHIRT = [0xf25c54, 0x2f80c8, 0xffe08a, 0x58c985, 0xc9b6ff, 0xfff4e3, 0xff9f6b, 0x33475b, 0x7fd3c8];
-const PANTS = [0x23323d, 0x33475b, 0x5a4636, 0x1c1c24, 0x6b7a85];
+/* townsfolk dress in the city's colours: charcoal, navy, stone, camel and the odd cream coat */
+const SHIRT = [0x2a2f3a, 0x3b4252, 0x7d838f, 0x6b5a3e, 0xc9c2b0, 0x1c2030, 0x4a5468, 0x9a8762, 0x23293a];
+const PANTS = [0x15181f, 0x23293a, 0x3a3328, 0x1c1c24, 0x4b505a];
 const HAIR = [0x1b1511, 0x3a2a1c, 0x6b4426, 0xc9a050, 0x222222, 0x8a8a8a];
 
 function angDiff(a: number, b: number): number {
@@ -46,7 +47,14 @@ function pick(r: () => number, list: readonly number[]): number {
 }
 
 let sharedMat: THREE.MeshStandardMaterial | null = null;
-const peopleMat = () => (sharedMat ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+const peopleMat = () => {
+  if (!sharedMat) {
+    sharedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
+    /* their colours are chosen above; the palette grade would turn skin grey */
+    sharedMat.userData.keepColor = true;
+  }
+  return sharedMat;
+};
 const tint = new THREE.Color();
 const spot = new THREE.Vector3();
 

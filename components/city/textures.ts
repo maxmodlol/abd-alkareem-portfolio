@@ -63,20 +63,23 @@ const get = (k: keyof RawSet): Raw => (raw ??= generateAll(detail))[k];
 
 export type SurfaceMaps = { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture };
 
-function surface(r: Raw, repeat: number): SurfaceMaps {
+function surface(r: Raw, repeat: number, kind: string): SurfaceMaps {
+  const map = tex(r.map!, r.size, true, repeat);
+  /* the palette grade tints each kind of ground differently (see palette.ts) */
+  map.userData.kind = kind;
   return {
-    map: tex(r.map!, r.size, true, repeat),
+    map,
     normalMap: tex(r.normal, r.size, false, repeat),
     roughnessMap: tex(r.rough!, r.size, false, repeat),
   };
 }
 
 /** Lawn: clumps of lighter and darker grass, dry patches and fine blade grain. */
-export const grassMaps = (repeat: number) => surface(get("grass"), repeat);
+export const grassMaps = (repeat: number) => surface(get("grass"), repeat, "grass");
 /** Asphalt: dark grain, lighter worn tracks and patched repairs. */
-export const asphaltMaps = (repeat: number) => surface(get("asphalt"), repeat);
+export const asphaltMaps = (repeat: number) => surface(get("asphalt"), repeat, "asphalt");
 /** Paving slabs with grout lines and a little dirt. */
-export const pavingMaps = (repeat: number) => surface(get("paving"), repeat);
+export const pavingMaps = (repeat: number) => surface(get("paving"), repeat, "paving");
 /** Small ripples for the sea, scrolled in two directions by the water shader. */
 export function rippleNormal(repeat: number): THREE.Texture {
   const r = get("ripple");
