@@ -2371,7 +2371,7 @@ body:has(.city) {
 .c-contact .c-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 10px;
   margin-top: 30px;
 }
@@ -2465,4 +2465,11 @@ body:has(.city) {
     right: 18px;
     bottom: max(48px, env(safe-area-inset-bottom));
   }
+}
+.c-card .c-cue {
+  margin-top: 22px !important;
+  color: var(--warm) !important;
+}
+.c-card .c-cue::after {
+  display: none;
 }

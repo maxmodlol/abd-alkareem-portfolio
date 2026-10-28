@@ -8,10 +8,11 @@ import { projects } from "@/lib/projects";
 import type { Cine, Quality } from "./scene";
 
 /**
- * The home page: one continuous camera move through a city, driven by the scroll. The text of the
- * portfolio is ordinary HTML in sections of the page, so it is readable, searchable and usable with
- * or without the 3D; the city behind it starts as a still and comes alive on the first scroll, key
- * press or pointer move, so loading it never slows down the first paint.
+ * The home page: a short film driven by the scroll, in which the author walks the visitor down a
+ * street and into one building per project. The text of the portfolio is ordinary HTML in sections
+ * of the page, so it is readable, searchable and usable with or without the 3D; the film behind it
+ * starts as a still and comes alive on the first scroll, key press or pointer move, so loading it
+ * never slows down the first paint.
  */
 
 type Stage = "idle" | "loading" | "live" | "failed" | "nogl";
@@ -56,22 +57,11 @@ function autoQuality(): Quality | null {
   return "high";
 }
 
-const CHAPTERS = [
-  "Arrival",
-  "Downtown",
-  "Between the towers",
-  "The avenue",
-  "The tower",
-  "The lobby",
-  ...projects.map((p) => p.name),
-  "Experience",
-  "Skills",
-  "Contact",
-];
-const WORK = 5;
-const EXPERIENCE = 14;
-const SKILLS = 15;
-const CONTACT = 16;
+const CHAPTERS = ["Hello", "The street", ...projects.flatMap((p) => [p.name, `Inside ${p.name}`]), "Experience", "Skills", "Contact"];
+const WORK = 2;
+const EXPERIENCE = 2 + projects.length * 2;
+const SKILLS = EXPERIENCE + 1;
+const CONTACT = SKILLS + 1;
 
 export function CinePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -129,7 +119,7 @@ export function CinePage() {
     };
   }, [measure]);
 
-  /* ---------- the 3D city ---------- */
+  /* ---------- the 3D film ---------- */
   const start = useCallback(() => {
     if (sceneRef.current || stage === "loading" || stage === "nogl") return;
     setStage("loading");
@@ -189,7 +179,7 @@ export function CinePage() {
     [],
   );
 
-  /* the city loads on the first sign of a person: a scroll, a key, a touch or a moving pointer */
+  /* the film loads on the first sign of a person: a scroll, a key, a touch or a moving pointer */
   useEffect(() => {
     if (stage !== "idle") return;
     const go = () => start();
@@ -262,14 +252,14 @@ export function CinePage() {
 
       {stage === "loading" ? (
         <div className="cine-load" role="status" aria-live="polite">
-          <span>{load.label || "Loading the city"}</span>
+          <span>{load.label || "Loading the street"}</span>
           <span className="mono">{load.done ? `${pct}%` : ""}</span>
           <i style={{ width: `${load.done ? pct : 4}%` }} />
         </div>
       ) : null}
       {stage === "failed" ? (
         <div className="cine-load err" role="alert">
-          <span>The 3D city could not load.</span>
+          <span>The 3D walk could not load.</span>
           <button type="button" onClick={() => start()}>
             Try again
           </button>
@@ -284,31 +274,17 @@ export function CinePage() {
             <br />
             Abu-Alsoud
           </h1>
-          <p className="c-lead">I build the systems products run on: SaaS platforms, CRMs, APIs and mobile apps.</p>
-          <p className="c-cue mono">Scroll to enter the city</p>
+          <p className="c-lead">I build the systems products run on: SaaS platforms, CRMs, APIs and mobile apps. Come for a walk through them.</p>
+          <p className="c-cue mono">Scroll to walk with me</p>
         </section>
 
-        <section ref={reg(1)} className="c-beat left">
+        <section ref={reg(1)} className="c-beat left" id="work">
           <p className="c-kicker">Three years in production</p>
-          <h2>Every tower in this city is a product someone depends on.</h2>
+          <h2>Every building on this street is a product I built.</h2>
           <p>
             I lean towards the backend: data models, APIs, integrations and the infrastructure that keeps them up. I build
-            the front end too, from Next.js dashboards to Flutter apps.
+            the front end too, from Next.js dashboards to Flutter apps. Let me show you round.
           </p>
-        </section>
-
-        <section ref={reg(2)} className="c-beat right">
-          <p className="c-kicker">How I work</p>
-          <h2>Quiet systems that keep working.</h2>
-          <p>
-            Multi-tenant platforms, webhook pipelines, single sign-on and caching that keeps pages fast. The kind of work
-            nobody sees when it is done well.
-          </p>
-        </section>
-
-        <section ref={reg(3)} className="c-beat left">
-          <p className="c-kicker">At the end of the avenue</p>
-          <h2>The work is in that tower.</h2>
           <dl className="c-stats">
             <div>
               <dt>Products</dt>
@@ -325,31 +301,33 @@ export function CinePage() {
           </dl>
         </section>
 
-        <section ref={reg(4)} className="c-beat center">
-          <h2>Come inside.</h2>
-        </section>
-
-        <section ref={reg(5)} className="c-beat center" id="work">
-          <p className="c-kicker">Selected work</p>
-          <h2>Eight products, one on every screen.</h2>
-        </section>
-
-        {projects.map((p, i) => (
-          <section key={p.id} ref={reg(6 + i)} className={`c-beat project ${i % 2 === 0 ? "right" : "left"}`}>
-            <article className="c-card">
-              <p className="c-kicker mono">
-                {String(i + 1).padStart(2, "0")} / {String(projects.length).padStart(2, "0")} · {p.kind}
-              </p>
-              <h2>{p.name}</h2>
-              <p>{p.text}</p>
-              <ul className="c-chips">
-                {p.stack.map((s) => (
-                  <li key={s}>{s}</li>
-                ))}
-              </ul>
-            </article>
-          </section>
-        ))}
+        {projects.map((p, i) => {
+          const side = i % 2 === 0 ? "right" : "left";
+          const n = `${String(i + 1).padStart(2, "0")} / ${String(projects.length).padStart(2, "0")}`;
+          return [
+            <section key={`${p.id}-out`} ref={reg(WORK + i * 2)} className={`c-beat project ${side}`}>
+              <article className="c-card">
+                <p className="c-kicker mono">
+                  {n} · {p.kind}
+                </p>
+                <h2>{p.name}</h2>
+                <p>{p.short}</p>
+                <p className="c-cue mono">Step inside</p>
+              </article>
+            </section>,
+            <section key={`${p.id}-in`} ref={reg(WORK + i * 2 + 1)} className={`c-beat project ${side}`}>
+              <article className="c-card">
+                <p className="c-kicker mono">Inside {p.name}</p>
+                <p>{p.text}</p>
+                <ul className="c-chips">
+                  {p.stack.map((s) => (
+                    <li key={s}>{s}</li>
+                  ))}
+                </ul>
+              </article>
+            </section>,
+          ];
+        })}
 
         <section ref={reg(EXPERIENCE)} className="c-beat left long" id="experience">
           <article className="c-card wide">
@@ -387,7 +365,7 @@ export function CinePage() {
           </article>
         </section>
 
-        <section ref={reg(CONTACT)} className="c-beat center c-contact" id="contact">
+        <section ref={reg(CONTACT)} className="c-beat left c-contact" id="contact">
           <p className="c-kicker">Contact</p>
           <h2>Let&rsquo;s build the next one.</h2>
           <p className="c-mail">

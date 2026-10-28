@@ -8,10 +8,13 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 
 import { projects } from "@/lib/projects";
 
-import { buildCity, TOWER } from "./city";
-import { createShot, nightAt } from "./path";
+import { buildCharacter } from "./character";
+import { Surfaces } from "./kit";
+import { LINE, SHOP } from "./layout";
+import { createShot, newFrame, timeAt } from "./path";
+import { buildShops } from "./shops";
 import { hazeColor, setSky, skyMaterial } from "./sky";
-import { buildTower } from "./tower";
+import { buildStreet } from "./street";
 
 export type Quality = "high" | "balanced" | "low";
 
@@ -22,18 +25,18 @@ export type Cine = {
   dispose: () => void;
 };
 
-const PRESET: Record<Quality, { radius: number; cars: number; shadow: number; ao: boolean; pr: number; samples: number; lights: number }> = {
-  high: { radius: 7, cars: 200, shadow: 2048, ao: true, pr: 1.75, samples: 4, lights: 3 },
-  balanced: { radius: 6, cars: 130, shadow: 1024, ao: false, pr: 1.5, samples: 4, lights: 3 },
-  low: { radius: 4, cars: 60, shadow: 0, ao: false, pr: 1.25, samples: 0, lights: 1 },
+const PRESET: Record<Quality, { detail: boolean; shadow: number; ao: boolean; pr: number; samples: number; lights: number }> = {
+  high: { detail: true, shadow: 2048, ao: true, pr: 1.75, samples: 4, lights: 2 },
+  balanced: { detail: true, shadow: 2048, ao: false, pr: 1.5, samples: 4, lights: 2 },
+  low: { detail: false, shadow: 1024, ao: false, pr: 1.25, samples: 0, lights: 1 },
 };
 
 /* a film grade: a touch of teal in the shadows and warmth in the highlights, vignette and grain */
 const GRADE = {
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) }, uFade: { value: 0 } },
   vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uTime; uniform vec2 uRes; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float uTime; uniform vec2 uRes; uniform float uFade; varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
       vec3 col = texture2D(tDiffuse, vUv).rgb;
@@ -43,6 +46,8 @@ const GRADE = {
       vec2 q = vUv - 0.5;
       col *= 1.0 - dot(q, q) * 0.55;
       col += (hash(vUv * uRes + fract(uTime) * 61.0) - 0.5) * 0.018;
+      /* the cut to black between scenes */
+      col *= 1.0 - uFade;
       gl_FragColor = vec4(max(col, 0.0), 1.0);
     }`,
 };
@@ -55,7 +60,7 @@ export async function createCine(o: {
   onContextLost?: () => void;
 }): Promise<Cine | null> {
   const preset = PRESET[o.quality];
-  const total = 7;
+  const total = 8;
   let done = 0;
   const step = async (label: string) => {
     o.onProgress?.(++done, total, label);
@@ -91,7 +96,7 @@ export async function createCine(o: {
   );
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, w / h, 0.3, 2600);
+  const camera = new THREE.PerspectiveCamera(40, w / h, 0.08, 3000);
   scene.fog = new THREE.FogExp2(0xc9a487, 0.0014);
   await step("Setting the light");
 
@@ -102,52 +107,58 @@ export async function createCine(o: {
   skyMesh.renderOrder = -1;
   scene.add(skyMesh);
   const sunDir = new THREE.Vector3();
-  const sunAt = (night: number, out: THREE.Vector3) => {
-    const elev = THREE.MathUtils.degToRad(THREE.MathUtils.lerp(8, -4, night));
-    return out.set(-0.42, Math.sin(elev), -1).normalize();
+  /* the sun is low over the start of the street, so he walks away from it and turns back into it */
+  const sunAt = (elevation: number, out: THREE.Vector3) => {
+    const e = THREE.MathUtils.degToRad(elevation);
+    return out.set(0.14 * Math.cos(e), Math.sin(e), Math.cos(e)).normalize();
   };
-  const hemi = new THREE.HemisphereLight(0x9fb6d8, 0x3b342c, 0.8);
+  const hemi = new THREE.HemisphereLight(0xb4c6e0, 0x5a5046, 0.9);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffc48a, 3);
+  const sun = new THREE.DirectionalLight(0xffd2a0, 3);
   sun.castShadow = preset.shadow > 0;
   if (sun.castShadow) {
     sun.shadow.mapSize.setScalar(preset.shadow);
     const c = sun.shadow.camera;
-    c.left = -150;
-    c.right = 150;
-    c.top = 150;
-    c.bottom = -150;
+    c.left = -34;
+    c.right = 34;
+    c.top = 34;
+    c.bottom = -34;
     c.near = 1;
-    c.far = 900;
-    sun.shadow.bias = -0.0005;
-    sun.shadow.normalBias = 0.6;
+    c.far = 400;
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.04;
   }
   scene.add(sun, sun.target);
 
-  /* the environment map, rendered from the sky itself at three times of day; reflections follow the hour */
+  /* the environment map, rendered from the sky at three times of day; reflections follow the hour */
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
   const envSky = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), skyMaterial());
   envScene.add(envSky);
-  /* a dark ground in the reflection, so glass mirrors the city's floor and not the sky below */
-  const envGround = new THREE.Mesh(new THREE.CircleGeometry(9.5, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x1a1a1c }));
+  const envGround = new THREE.Mesh(new THREE.CircleGeometry(9.5, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x5a554d }));
   envGround.position.y = -0.4;
   envScene.add(envGround);
-  const envs = [0, 0.5, 1].map((n) => {
-    setSky(envSky.material as THREE.ShaderMaterial, n, sunAt(n, new THREE.Vector3()));
-    (envGround.material as THREE.MeshBasicMaterial).color.setScalar(0.2 - n * 0.16);
+  const hours = [0, 0.5, 1].map((p) => timeAt(p));
+  const envs = hours.map(({ night, elevation }) => {
+    setSky(envSky.material as THREE.ShaderMaterial, night, sunAt(elevation, new THREE.Vector3()));
+    (envGround.material as THREE.MeshBasicMaterial).color.setScalar(0.32 - night * 0.3);
     return pmrem.fromScene(envScene, 0.02).texture;
   });
   pmrem.dispose();
   scene.environment = envs[0];
-  await step("Laying out the streets");
+  await step("Paving the street");
 
-  /* ---------- the city and the tower ---------- */
+  /* ---------- the town, the buildings and the man ---------- */
   const font = getComputedStyle(document.body).getPropertyValue("--font-body").trim() || "Arial";
-  const city = buildCity(scene, { radius: preset.radius, cars: preset.cars, detail: o.quality !== "low", shadows: preset.shadow > 0 });
-  await step("Raising the towers");
-  const tower = buildTower(scene, projects, { lights: preset.lights, font: `${font}, Arial, sans-serif` });
-  await step("Opening the lobby");
+  const surfaces = new Surfaces();
+  const shadows = preset.shadow > 0;
+  const street = buildStreet(scene, { shadows, detail: preset.detail, surfaces });
+  await step("Raising the buildings");
+  const shops = buildShops(scene, projects, { shadows, font: `${font}, Arial, sans-serif`, lights: preset.lights, surfaces });
+  await step("Furnishing the rooms");
+  const guide = buildCharacter({ shadows });
+  scene.add(guide.root);
+  await step("Waking him up");
 
   /* ---------- post ---------- */
   const target = new THREE.WebGLRenderTarget(w * pr, h * pr, { type: THREE.HalfFloatType, samples: preset.samples });
@@ -158,11 +169,11 @@ export async function createCine(o: {
   let gtao: GTAOPass | null = null;
   if (preset.ao) {
     gtao = new GTAOPass(scene, camera, w * pr, h * pr);
-    gtao.updateGtaoMaterial({ radius: 2.5, distanceExponent: 1.5, thickness: 3, scale: 1, samples: 12 });
-    gtao.blendIntensity = 0.8;
+    gtao.updateGtaoMaterial({ radius: 0.8, distanceExponent: 1.5, thickness: 1.5, scale: 1, samples: 12 });
+    gtao.blendIntensity = 0.75;
     composer.addPass(gtao);
   }
-  const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.6, 0.85);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.3, 0.5, 0.9);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
   const grade = new ShaderPass(GRADE);
@@ -172,48 +183,67 @@ export async function createCine(o: {
 
   /* ---------- the shot ---------- */
   const shot = createShot();
+  const shotFrame = newFrame();
   let goal = 0;
   let p = 0;
   let first = true;
-  const pos = new THREE.Vector3();
-  const look = new THREE.Vector3();
   const haze = new THREE.Color();
+  const focus = new THREE.Vector3();
+  const lookAt = new THREE.Vector3();
+  const head = new THREE.Vector3();
   const apply = (t: number, dt: number) => {
-    camera.fov = shot.at(p, pos, look);
-    /* a slow drift, as if the camera were on a drone and not a rail */
+    shot.at(p, shotFrame);
+    camera.fov = shotFrame.fov;
+    camera.position.copy(shotFrame.cam);
+    /* a hand-held camera: the slightest breathing drift */
     if (!o.reduceMotion) {
-      const amp = pos.y > 20 ? 0.6 : 0.04;
-      pos.x += Math.sin(t * 0.31) * amp;
-      pos.y += Math.sin(t * 0.23 + 1.3) * amp * 0.6;
+      camera.position.x += Math.sin(t * 0.37) * 0.025;
+      camera.position.y += Math.sin(t * 0.29 + 1.3) * 0.018;
     }
-    camera.position.copy(pos);
-    camera.lookAt(look);
+    /* on a tall phone screen the frame is narrow and the text sits in its lower half: step back
+       from him when close, keep him in frame and tilt down so he stands in the upper half */
+    const narrow = THREE.MathUtils.clamp(1 - camera.aspect, 0, 0.6);
+    head.set(shotFrame.char.x, 1.35, shotFrame.char.z);
+    const dist = camera.position.distanceTo(head);
+    camera.position.addScaledVector(lookAt.subVectors(camera.position, head), narrow * 0.7 * (1 - THREE.MathUtils.smoothstep(dist, 4, 9)));
+    lookAt.copy(shotFrame.look).lerp(head, narrow * 0.75);
+    lookAt.y -= narrow * Math.min(dist, 12) * 0.3;
+    camera.fov = shotFrame.fov * (1 + narrow * 0.3);
+    camera.lookAt(lookAt);
+    /* the still-frame script can place the camera anywhere */
+    const dbg = globalThis as { __cityCapture?: boolean; __cineCam?: { pos: [number, number, number]; look: [number, number, number]; fov?: number } };
+    if (dbg.__cityCapture && dbg.__cineCam) {
+      camera.position.fromArray(dbg.__cineCam.pos);
+      camera.lookAt(...dbg.__cineCam.look);
+      camera.fov = dbg.__cineCam.fov ?? camera.fov;
+    }
     camera.updateProjectionMatrix();
     skyMesh.position.copy(camera.position);
 
-    const night = nightAt(p);
-    sunAt(night, sunDir);
+    const { night, elevation } = timeAt(p);
+    sunAt(elevation, sunDir);
     setSky(sky, night, sunDir);
-    scene.environment = envs[night < 0.3 ? 0 : night < 0.75 ? 1 : 2];
-    scene.environmentIntensity = THREE.MathUtils.lerp(1, 0.55, night);
+    scene.environment = envs[p < 0.33 ? 0 : p < 0.8 ? 1 : 2];
+    const cx = Math.abs(camera.position.x);
+    const indoors = cx > LINE + 0.3 && cx < LINE + SHOP.depth && camera.position.y < SHOP.floor;
+    scene.environmentIntensity = indoors ? 0.55 : THREE.MathUtils.lerp(1, 0.7, night);
     hazeColor(night, haze);
     (scene.fog as THREE.FogExp2).color.copy(haze);
-    const indoors = pos.z < TOWER.z + TOWER.d / 2 && pos.z > TOWER.z - TOWER.d / 2 && Math.abs(pos.x) < TOWER.w / 2;
-    (scene.fog as THREE.FogExp2).density = indoors ? 0.0003 : THREE.MathUtils.lerp(0.00075, 0.0006, night);
-    sun.intensity = THREE.MathUtils.lerp(3.2, 0.0, THREE.MathUtils.smoothstep(night, 0.3, 0.8));
-    sun.color.setHSL(0.07, 0.85, THREE.MathUtils.lerp(0.72, 0.55, night));
-    hemi.intensity = THREE.MathUtils.lerp(0.9, 0.35, night);
-    hemi.color.setHSL(0.6, 0.45, THREE.MathUtils.lerp(0.72, 0.4, night));
-    renderer.toneMappingExposure = THREE.MathUtils.lerp(1.0, 1.12, night);
-    bloom.strength = THREE.MathUtils.lerp(0.3, 0.55, night);
-    bloom.threshold = THREE.MathUtils.lerp(0.92, 0.8, night);
+    (scene.fog as THREE.FogExp2).density = indoors ? 0.0004 : THREE.MathUtils.lerp(0.0013, 0.0016, night);
+    sun.intensity = THREE.MathUtils.lerp(3.4, 2.2, THREE.MathUtils.smoothstep(night, 0.1, 0.42));
+    sun.color.setHSL(0.075, 0.8, THREE.MathUtils.lerp(0.78, 0.66, night * 2));
+    hemi.intensity = THREE.MathUtils.lerp(1.0, 0.7, night * 2);
+    renderer.toneMappingExposure = indoors ? 1.05 : THREE.MathUtils.lerp(1.0, 1.08, night * 2);
+    bloom.strength = THREE.MathUtils.lerp(0.22, 0.4, night * 2);
+    grade.uniforms.uFade.value = shotFrame.fade;
 
-    /* the shadow camera follows what the camera looks at */
-    const focus = indoors ? pos : look.clone().lerp(pos, 0.35);
+    /* the shadows follow him */
+    focus.copy(shotFrame.char);
     sun.target.position.copy(focus);
-    sun.position.copy(focus).addScaledVector(sunDir, 400);
-    city.update(t, o.reduceMotion ? 0 : dt, night, focus);
-    tower.update(camera.position, t, night, shot.screen(p));
+    sun.position.copy(focus).addScaledVector(sunDir, 200);
+    street.update(t, night);
+    shops.update(t, o.reduceMotion ? 0.016 : dt, night, shotFrame.char);
+    guide.update(shotFrame, t, camera.position);
   };
 
   /* compile every shader before the first frame, without blocking the page */
@@ -242,7 +272,7 @@ export async function createCine(o: {
     const k = o.reduceMotion ? 1 : 1 - Math.exp(-dt * 3.2);
     const moving = Math.abs(goal - p) > 0.00002;
     p += (goal - p) * k;
-    /* when nothing scrolls, the city still lives (cars, lights) at a calmer frame rate */
+    /* when nothing scrolls, he still breathes and the town still lives, at a calmer frame rate */
     idleFrames = moving ? 0 : idleFrames + 1;
     if (!moving && idleFrames % 2 === 1) return;
     apply(t, moving ? dt : dt * 2);
@@ -300,8 +330,10 @@ export async function createCine(o: {
       stop();
       abort.abort();
       ro.disconnect();
-      city.dispose();
-      tower.dispose();
+      street.dispose();
+      shops.dispose();
+      guide.dispose();
+      surfaces.dispose();
       envs.forEach((e) => e.dispose());
       composer.dispose();
       target.dispose();
