@@ -24,6 +24,12 @@ The home page (`components/cine/`):
 - `scene.ts`: renderer, sky and reflections, post-processing (ambient occlusion on high, bloom, film grade) and a frame governor. Quality presets are picked from the device.
 - `facade.ts`, `sky.ts`, `kit.ts`: window shaders for the buildings, the sky, and the helpers that merge geometry and draw canvas textures.
 
+The film can also be real video instead of live 3D:
+
+- `film.ts`: plays a run of clips as one shot scrubbed by the scroll. Each clip is fetched whole, nearest the visitor first, so seeking never waits on the network; its first frame stands in until it arrives. Phones and Save-Data get a 960 px cut, and browsers without VP9 get MP4.
+- `film.json`: the clips and the film time at which each section of the page rests. While it lists no clips the page renders the 3D street.
+- `scripts/film.mjs`: put the clips in `film-src/` in playing order (`01-hello.mp4`, `02-street.mp4`, ...) and run `node scripts/film.mjs`. It needs ffmpeg, encodes every clip for scrubbing into `public/film/`, takes the posters from the hero's frame and writes `film.json`. Twelve clips map to the sections by the shot plan; for anything else add `film-src/film.config.json` (see the script).
+
 To shoot still frames on a machine without a graphics card, set `window.__cityCapture = true` before the page loads (and `window.__cineQuality = "high"` for the full look).
 
 The game at `/play` (`components/city/`):

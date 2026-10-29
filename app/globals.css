@@ -2038,6 +2038,34 @@ body:has(.city) {
 .cine.stage-live .cine-canvas {
   opacity: 1;
 }
+/* the video film: one clip shown at a time, its first frame behind it until it has loaded */
+.cine-film {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.cine.stage-live .cine-film {
+  opacity: 1;
+}
+.film-clip {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  background: center / cover no-repeat;
+  background-position: var(--film-focus, 50%) 50%;
+}
+.film-clip.on {
+  visibility: visible;
+}
+.film-clip video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--film-focus, 50%) 50%;
+}
 /* a soft darkening at the edges where the text sits */
 .cine-shade {
   pointer-events: none;

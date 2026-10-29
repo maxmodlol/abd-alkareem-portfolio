@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { jobs, person, skills } from "@/lib/content";
 import { projects } from "@/lib/projects";
 
+import type { FilmManifest } from "./film";
+import film from "./film.json";
 import type { Cine, Quality } from "./scene";
 
 /**
@@ -57,6 +59,10 @@ function autoQuality(): Quality | null {
   return "high";
 }
 
+/* when clips have been encoded into /film the page plays them; until then it renders the street live */
+const FILM = film as FilmManifest;
+const HAS_FILM = FILM.clips.length > 0;
+
 const CHAPTERS = ["Hello", "The street", ...projects.flatMap((p) => [p.name, `Inside ${p.name}`]), "Experience", "Skills", "Contact"];
 const WORK = 2;
 const EXPERIENCE = 2 + projects.length * 2;
@@ -65,6 +71,7 @@ const CONTACT = SKILLS + 1;
 
 export function CinePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const filmRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<Cine | null>(null);
   const beatRefs = useRef<(HTMLElement | null)[]>([]);
   const progressRef = useRef(0);
@@ -128,9 +135,31 @@ export function CinePage() {
 
   useEffect(() => {
     if (!gen) return;
+    let cancelled = false;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const host = filmRef.current;
+    if (HAS_FILM && host) {
+      import("./film")
+        .then(({ createFilm }) =>
+          createFilm({ host, manifest: FILM, reduceMotion, onProgress: (done, total, label) => !cancelled && setLoad({ done, total, label }) }),
+        )
+        .then((f) => {
+          if (cancelled || !f) {
+            f?.dispose();
+            if (!f && !cancelled) setStage("failed");
+            return;
+          }
+          sceneRef.current = f;
+          f.setProgress(progressRef.current);
+          setStage("live");
+        })
+        .catch(() => !cancelled && setStage("failed"));
+      return () => {
+        cancelled = true;
+      };
+    }
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let cancelled = false;
     const quality = autoQuality();
     if (!quality) {
       setStage("nogl");
@@ -138,7 +167,7 @@ export function CinePage() {
     }
     /* the poster capture script asks for still frames: no easing, no drift */
     const capture = (globalThis as { __cityCapture?: boolean }).__cityCapture === true;
-    const reduce = capture || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = capture || reduceMotion;
     loadSceneModule()
       .then(async ({ createCine }) => {
         if (cancelled) return;
@@ -214,11 +243,15 @@ export function CinePage() {
   return (
     <div className={`cine stage-${stage}`}>
       <picture className="cine-poster">
-        <source media="(max-width: 759px)" srcSet="/cine-tall.webp" />
+        <source media="(max-width: 759px)" srcSet={HAS_FILM ? "/film/poster-tall.webp" : "/cine-tall.webp"} />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/cine-wide.webp" alt="" fetchPriority="high" decoding="async" width={1600} height={900} />
+        <img src={HAS_FILM ? "/film/poster-wide.webp" : "/cine-wide.webp"} alt="" fetchPriority="high" decoding="async" width={1600} height={900} />
       </picture>
-      <canvas key={gen} ref={canvasRef} className="cine-canvas" aria-hidden="true" />
+      {HAS_FILM ? (
+        <div key={gen} ref={filmRef} className="cine-film" aria-hidden="true" />
+      ) : (
+        <canvas key={gen} ref={canvasRef} className="cine-canvas" aria-hidden="true" />
+      )}
       <div className="cine-shade" aria-hidden="true" />
 
       <header className="cine-top">
@@ -252,14 +285,14 @@ export function CinePage() {
 
       {stage === "loading" ? (
         <div className="cine-load" role="status" aria-live="polite">
-          <span>{load.label || "Loading the street"}</span>
+          <span>{load.label || (HAS_FILM ? "Loading the film" : "Loading the street")}</span>
           <span className="mono">{load.done ? `${pct}%` : ""}</span>
           <i style={{ width: `${load.done ? pct : 4}%` }} />
         </div>
       ) : null}
       {stage === "failed" ? (
         <div className="cine-load err" role="alert">
-          <span>The 3D walk could not load.</span>
+          <span>{HAS_FILM ? "The film could not load." : "The 3D walk could not load."}</span>
           <button type="button" onClick={() => start()}>
             Try again
           </button>
