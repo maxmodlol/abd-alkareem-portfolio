@@ -2,7 +2,6 @@ import * as THREE from "three";
 
 import { canvasTex, rng, type Kit } from "./kit";
 import { leafBlob, windify } from "./nature";
-import { Sky as PhysicalSky } from "three/examples/jsm/objects/Sky.js";
 import { asphaltMaps, pavingMaps, rippleNormal, worldUV } from "./textures";
 import { ISLETS, SEA_Y, SHORE_GLSL, type Palms } from "./coast";
 import type { Folks } from "./people";
@@ -13,17 +12,19 @@ export { SEA_Y };
 /* ------------------------------------------------------------------ */
 /* Sky                                                                                             */
 /* ------------------------------------------------------------------ */
+/* bloom: "day" is the blue hour, deep indigo overhead falling to a band of rose and peach at the
+   horizon; night is a deep-sea navy with a cyan glow where the sun went down */
 const SKY_DAY = {
-  top: new THREE.Color(0x2d7fe0),
-  mid: new THREE.Color(0x76bdf2),
-  hor: new THREE.Color(0xbfe4fa),
-  sun: new THREE.Color(0xfff3dc),
+  top: new THREE.Color(0x1d2a78),
+  mid: new THREE.Color(0x6d5cc4),
+  hor: new THREE.Color(0xffa9c4),
+  sun: new THREE.Color(0xffc9a6),
 };
 const SKY_NIGHT = {
-  top: new THREE.Color(0x040818),
-  mid: new THREE.Color(0x0e1a44),
-  hor: new THREE.Color(0x1d2d63),
-  sun: new THREE.Color(0x8fb0ff),
+  top: new THREE.Color(0x050a26),
+  mid: new THREE.Color(0x142060),
+  hor: new THREE.Color(0x4a3a8c),
+  sun: new THREE.Color(0x5ce6ff),
 };
 
 export function createSkyMaterial(): THREE.ShaderMaterial {
@@ -56,7 +57,8 @@ export function createSkyMaterial(): THREE.ShaderMaterial {
         vec3 col = mix(uHor, uMid, smoothstep(0.0, 0.32, h));
         col = mix(col, uTop, smoothstep(0.22, 0.95, h));
         float s = max(dot(d, uSunDir), 0.0);
-        col += uSun * uSunPower * (pow(s, 6.0) * 0.16 + pow(s, 70.0) * 0.5 + pow(s, 1400.0) * 5.0);
+        /* the sun has just set: only its afterglow is left, low on the horizon */
+        col += uSun * uSunPower * (pow(s, 4.0) * 0.14 + pow(s, 24.0) * 0.3) * (1.0 - smoothstep(0.0, 0.5, h));
         col = mix(col, uHor * 0.55, smoothstep(0.0, -0.25, d.y));
         gl_FragColor = vec4(col, 1.0);
       }
@@ -70,40 +72,12 @@ export type Sky = {
   update: (night: number, sunDir: THREE.Vector3, cam: THREE.Vector3) => void;
 };
 
-/** The Preetham daylight model on a clear day. alpha fades it into the stylised sky. */
-export function createPhysicalSky(): { mesh: PhysicalSky; set: (sunDir: THREE.Vector3, alpha: number) => void } {
-  const mesh = new PhysicalSky();
-  const m = mesh.material as THREE.ShaderMaterial;
-  m.uniforms.uAlpha = { value: 1 };
-  m.uniforms.uGain = { value: 0.62 };
-  m.fragmentShader = m.fragmentShader
-    .replace("uniform vec3 up;", "uniform vec3 up;\nuniform float uAlpha;\nuniform float uGain;")
-    .replace("gl_FragColor = vec4( retColor, 1.0 );", "gl_FragColor = vec4( retColor * uGain, uAlpha );");
-  m.transparent = true;
-  m.uniforms.turbidity.value = 2.4;
-  m.uniforms.rayleigh.value = 1.3;
-  m.uniforms.mieCoefficient.value = 0.004;
-  m.uniforms.mieDirectionalG.value = 0.86;
-  mesh.scale.setScalar(440);
-  mesh.frustumCulled = false;
-  return {
-    mesh,
-    set(sunDir, alpha) {
-      (m.uniforms.sunPosition.value as THREE.Vector3).copy(sunDir);
-      m.uniforms.uAlpha.value = alpha;
-    },
-  };
-}
-
 export function makeSky(scene: THREE.Scene): Sky {
   const mat = createSkyMaterial();
   const dome = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), mat);
   dome.renderOrder = -10;
   dome.frustumCulled = false;
   scene.add(dome);
-  const phys = createPhysicalSky();
-  phys.mesh.renderOrder = -9;
-  scene.add(phys.mesh);
 
   const R = rng(99);
   const n = 1100;
@@ -117,8 +91,8 @@ export function makeSky(scene: THREE.Scene): Sky {
   const sg = new THREE.BufferGeometry();
   sg.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   const starMat = new THREE.PointsMaterial({
-    color: 0xffffff,
-    size: 1.7,
+    color: 0xdfe4f2,
+    size: 1.4,
     sizeAttenuation: false,
     transparent: true,
     opacity: 0,
@@ -139,14 +113,11 @@ export function makeSky(scene: THREE.Scene): Sky {
       (u.uHor.value as THREE.Color).lerpColors(SKY_DAY.hor, SKY_NIGHT.hor, night);
       (u.uSun.value as THREE.Color).lerpColors(SKY_DAY.sun, SKY_NIGHT.sun, night);
       (u.uSunDir.value as THREE.Vector3).copy(sunDir);
-      u.uSunPower.value = 1 - night * 0.55;
-      fog.copy(u.uHor.value as THREE.Color);
+      u.uSunPower.value = 1 - night * 0.7;
+      fog.copy(u.uHor.value as THREE.Color).lerp(u.uMid.value as THREE.Color, 0.62);
       dome.position.copy(cam);
-      phys.mesh.position.copy(cam);
-      /* a light layer of real scattering over the clean game-sky gradient */
-      phys.set(sunDir, Math.max(0, 0.35 - night * 0.6));
       stars.position.copy(cam);
-      starMat.opacity = Math.max(0, night * 1.2 - 0.25);
+      starMat.opacity = 0.28 + night * 0.5;
     },
   };
 }
@@ -167,13 +138,14 @@ export function makeSea(scene: THREE.Scene): Sea {
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x061a2c,
-    roughness: 0.22,
+    color: 0x0a0e17,
+    roughness: 0.16,
     metalness: 0,
     normalMap: rippleNormal(70),
-    normalScale: new THREE.Vector2(0.28, 0.28),
-    envMapIntensity: 0.3,
+    normalScale: new THREE.Vector2(0.22, 0.22),
+    envMapIntensity: 0.55,
   });
+  mat.userData.keepColor = true;
   const seaU = {
     uTime: { value: 0 },
     uNight: { value: 0 },
@@ -217,16 +189,17 @@ export function makeSea(scene: THREE.Scene): Sea {
         float d = shoreDist(vSeaP);
         float n1 = sNoise(vSeaP * 1.6 + vec2(uTime * 0.18, -uTime * 0.12));
         float n2 = sNoise(vSeaP * 0.3 - vec2(uTime * 0.04));
-        vec3 water = mix(vec3(0.1, 0.8, 0.78), vec3(0.03, 0.66, 0.86), smoothstep(0.1, 3.8, d + (n2 - 0.5) * 1.4));
-        water = mix(water, vec3(0.02, 0.45, 0.8), smoothstep(3.0, 12.0, d));
-        water = mix(water, vec3(0.02, 0.33, 0.68), smoothstep(18.0, 70.0, d));
-        water = mix(water, vec3(0.8, 0.97, 0.97), smoothstep(0.08, 0.22, vWave) * 0.3);
+        /* a glowing lagoon: aqua over the shallows, sea blue further out, deep indigo at the edge of the world */
+        vec3 water = mix(vec3(0.05, 0.34, 0.42), vec3(0.02, 0.16, 0.3), smoothstep(0.1, 3.8, d + (n2 - 0.5) * 1.4));
+        water = mix(water, vec3(0.018, 0.07, 0.19), smoothstep(3.0, 12.0, d));
+        water = mix(water, vec3(0.016, 0.03, 0.1), smoothstep(18.0, 70.0, d));
+        water = mix(water, vec3(0.3, 0.6, 0.7), smoothstep(0.08, 0.22, vWave) * 0.25);
         float edge = 1.0 - smoothstep(0.04, 0.22 + n1 * 0.3, d);
         float band = smoothstep(0.6, 0.92, sin(d * 3.3 - uTime * 1.3 + n2 * 5.0) * 0.5 + 0.5)
           * (1.0 - smoothstep(0.4, 2.6, d)) * smoothstep(0.3, 0.6, n1);
-        seaFoam = clamp(max(edge, band * 0.75), 0.0, 1.0);
-        vec3 dayCol = mix(water, vec3(0.98, 1.0, 1.0), seaFoam);
-        diffuseColor.rgb = mix(dayCol, diffuseColor.rgb * (1.0 + seaFoam * 1.5), uNight);`,
+        seaFoam = clamp(max(edge, band * 0.75), 0.0, 1.0) * 0.45;
+        vec3 dayCol = mix(water, vec3(0.75, 0.9, 0.95), seaFoam);
+        diffuseColor.rgb = mix(dayCol, dayCol * 0.6, uNight);`,
       )
       .replace(
         "#include <roughnessmap_fragment>",
@@ -244,7 +217,7 @@ export function makeSea(scene: THREE.Scene): Sea {
         normal = normalize(tbn * mapN);`,
       );
   };
-  mat.customProgramCacheKey = () => "tropical-sea";
+  mat.customProgramCacheKey = () => "lagoon-bloom";
   const sea = new THREE.Mesh(geo, mat);
   sea.position.y = SEA_Y;
   sea.receiveShadow = true;
@@ -265,7 +238,9 @@ export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, fol
   const asphalt = worldUV(new THREE.MeshStandardMaterial({ ...asphaltMaps(1), roughness: 1, normalScale: new THREE.Vector2(0.7, 0.7) }), 0.45);
   const curb = worldUV(new THREE.MeshStandardMaterial({ ...pavingMaps(1), roughness: 1, normalScale: new THREE.Vector2(0.9, 0.9) }), 1.1);
   const paint = kit.mat(0xfff1d0, 0.7);
-  const amber = kit.mat(0xffd36b, 0.7);
+  /* the lane markings are lit from within: a thin line of gold down every road */
+  const amber = kit.glowMat(0x5ce6ff, 0.5, 1.5, 0x1a1810);
+  const strip = kit.glowMat(0xff6fb0, 0.35, 1.2, 0x15140f);
 
   kit.box(island, 21, 0.04, 1.6, asphalt, 0, 0, 0, false);
   kit.box(island, 1.6, 0.038, 21, asphalt, 0, 0, 0, false);
@@ -286,11 +261,13 @@ export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, fol
     }
   }
 
-  /* pavements, quadrant by quadrant */
+  /* pavements, quadrant by quadrant, each edged with a recessed light line along the kerb */
   for (const sx of [-1, 1] as const) {
     for (const sz of [-1, 1] as const) {
       kit.box(island, 9.2, 0.1, 0.55, curb, sx * 5.4, 0, sz * 1.075, false);
       kit.box(island, 0.55, 0.1, 8.65, curb, sx * 1.075, 0, sz * 5.675, false);
+      kit.box(island, 9.2, 0.012, 0.022, strip, sx * 5.4, 0.1, sz * 0.815, false);
+      kit.box(island, 0.022, 0.012, 8.65, strip, sx * 0.815, 0.1, sz * 5.675, false);
     }
   }
 
@@ -373,7 +350,8 @@ export function makeStreets(kit: Kit, island: THREE.Group, traffic: Traffic, fol
   }
 
   /* traffic */
-  const colors = [0xf25c54, 0x2f80c8, 0xfff4e3, 0x58c985, 0xc9b6ff, 0x33475b];
+  /* graphite, gunmetal, pearl and one bronze: cars in 2049 are quiet colours */
+  const colors = [0x22262f, 0x6f7480, 0xd9d6cf, 0x3a3f4b, 0x8a6d45, 0x14171d];
   let ci = 0;
   const nextColor = () => colors[ci++ % colors.length];
   traffic.add(island, "sedan", nextColor(), "x", 1, -9.0);
@@ -413,14 +391,16 @@ export function makeArcs(kit: Kit, island: THREE.Group, points: Record<string, T
     ["sgsoft", "sahefa"],
   ];
   const lineMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0xff8a6a).multiplyScalar(1.5),
+    color: new THREE.Color(0xff6fb0).multiplyScalar(1.4),
     transparent: true,
     opacity: 0.22,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const orbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffa27a).multiplyScalar(2.0), toneMapped: true });
-  const orbGeo = new THREE.SphereGeometry(0.07, 8, 6);
+  const orbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf4f1ff).multiplyScalar(1.3), toneMapped: true });
+  lineMat.userData.keepColor = true;
+  orbMat.userData.keepColor = true;
+  const orbGeo = new THREE.SphereGeometry(0.045, 8, 6);
   const orbs: { m: THREE.Mesh; curve: THREE.QuadraticBezierCurve3; ph: number; sp: number }[] = [];
   pairs.forEach(([a, b], i) => {
     const pa = points[a];
@@ -442,7 +422,7 @@ export function makeArcs(kit: Kit, island: THREE.Group, points: Record<string, T
       o.m.position.copy(o.curve.getPoint(u));
       o.m.scale.setScalar(0.7 + Math.sin(u * Math.PI) * 0.8);
     });
-    lineMat.opacity = 0.14 + kit.night * 0.14;
+    lineMat.opacity = 0.12 + kit.night * 0.12;
   });
 }
 
@@ -454,7 +434,7 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
   const dark = kit.mat(0x1d2a33, 0.5, 0.3);
 
   /* gulls */
-  const birdMat = new THREE.MeshStandardMaterial({ color: 0xfff4e3, roughness: 0.8, side: THREE.DoubleSide, emissive: 0x332a3a, emissiveIntensity: 0.4 });
+  const birdMat = new THREE.MeshStandardMaterial({ color: 0x9aa1b0, roughness: 0.8, side: THREE.DoubleSide });
   const wingGeo = new THREE.PlaneGeometry(0.3, 0.12);
   wingGeo.rotateX(-Math.PI / 2);
   const birds: { g: THREE.Group; l: THREE.Group; r: THREE.Group; rad: number; h: number; sp: number; a0: number; ph: number }[] = [];
@@ -516,27 +496,27 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
   void sl;
   heli.scale.setScalar(1.3);
 
-  /* hot air balloon */
+  /* an airship drifting over the bay, a slim dark hull with a lit band and the owner's name along its side */
   const bal = new THREE.Group();
   scene.add(bal);
-  const stripes = canvasTex(256, 128, (g, w, h) => {
-    const cols = ["#f25c54", "#fff4e3", "#ffb27a", "#fff4e3", "#58c3a0", "#fff4e3", "#c9b6ff", "#fff4e3"];
-    cols.forEach((c, i) => {
-      g.fillStyle = c;
-      g.fillRect((i * w) / cols.length, 0, w / cols.length + 1, h);
-    });
-  });
-  const envMat = new THREE.MeshStandardMaterial({ map: stripes, emissiveMap: stripes, emissive: 0xffffff, emissiveIntensity: 0.12, roughness: 0.8 });
-  kit.glows.push({ m: envMat, day: 0.12, night: 0.7 });
-  const env = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), envMat);
-  env.scale.set(1, 1.2, 1);
-  env.position.y = 1.4;
-  bal.add(env);
-  kit.cone(bal, 0.32, 0.55, envMat, 0, 0.35, 0, 12, false).rotation.x = Math.PI;
-  kit.box(bal, 0.34, 0.24, 0.34, 0x8a5a3c, 0, -0.1, 0, true);
-  ([-1, 1] as const).forEach((sx) => ([-1, 1] as const).forEach((sz) => kit.box(bal, 0.012, 0.6, 0.012, 0x4a2f1f, sx * 0.15, 0.1, sz * 0.15, false).rotation.set(sz * 0.18, 0, -sx * 0.18)));
-  kit.ball(bal, 0.05, kit.glowMat(0xffa040, 2, 6, 0x442200), 0, 0.3, 0, 8, false);
-  bal.scale.setScalar(1.6);
+  const shipHull = kit.mat(0x2a2f3a, 0.35, 0.7);
+  const hullMesh = kit.ball(bal, 1, shipHull, 0, 0, 0, 28, false);
+  hullMesh.scale.set(0.62, 0.62, 2.6);
+  const band = kit.glowMat(0xff6fb0, 0.8, 2.2, 0x14120c);
+  const bandMesh = kit.put(bal, new THREE.TorusGeometry(0.6, 0.018, 6, 40), band, 0, 0, 0.9, false);
+  bandMesh.scale.set(1.04, 1.04, 1);
+  kit.put(bal, new THREE.TorusGeometry(0.6, 0.018, 6, 40), band, 0, 0, -0.9, false).scale.set(1.04, 1.04, 1);
+  kit.box(bal, 0.28, 0.16, 0.9, shipHull, 0, -0.74, 0.1, false);
+  for (const s of [-1, 1]) {
+    const fin = kit.box(bal, 0.04, 0.5, 0.5, shipHull, s * 0.32, -0.1, -2.3, false);
+    fin.rotation.z = s * 0.6;
+    const name = kit.sign("Abd Alkareem", 2.6, 0.34, { fg: "", bg: "", day: 0.9, night: 2.0 });
+    name.rotation.y = (s * Math.PI) / 2;
+    name.position.set(s * 0.63, 0.02, 0);
+    bal.add(name);
+  }
+  const shipBlink = kit.ball(bal, 0.05, kit.glowMat(0xff3b30, 2, 6, 0x330000), 0, -0.84, -0.3, 6, false);
+  bal.scale.setScalar(1.5);
 
   /* boats */
   const sailboat = (hullColor: number): THREE.Group => {
@@ -672,11 +652,11 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
     scene.add(g);
     clouds.push({ g, a, r, sp: 0.006 + (c % 3) * 0.003 });
   }
-  const cloudDay = new THREE.Color(0xffe2cc);
-  const cloudNight = new THREE.Color(0x3a4670);
+  const cloudDay = new THREE.Color(0x4a4250);
+  const cloudNight = new THREE.Color(0x161b28);
 
   /* drifting lanterns and fireflies */
-  const nL = 110;
+  const nL = 60;
   const lp = new Float32Array(nL * 3);
   const seeds: { x: number; z: number; y: number; sp: number; ph: number }[] = [];
   for (let i = 0; i < nL; i++) {
@@ -688,7 +668,7 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
   lg.setAttribute("position", new THREE.BufferAttribute(lp, 3));
   const lanternMat = new THREE.PointsMaterial({
     color: 0xffd9a0,
-    size: 0.16,
+    size: 0.06,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
@@ -721,8 +701,9 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
     lightMat.opacity = 0.04 + kit.night * 0.12;
 
     const ba = t * 0.025 + 1.2;
-    bal.position.set(Math.cos(ba) * 21 - 6, 8.5 + Math.sin(t * 0.5) * 0.5, Math.sin(ba) * 21 + 3);
-    bal.rotation.y = t * 0.05;
+    bal.position.set(Math.cos(ba) * 24 - 6, 11 + Math.sin(t * 0.5) * 0.3, Math.sin(ba) * 24 + 3);
+    bal.rotation.y = Math.atan2(-Math.sin(ba), Math.cos(ba));
+    shipBlink.visible = Math.floor(t * 1.2) % 2 === 0;
 
     boats.forEach((b) => {
       const a = b.a0 + t * b.sp;
@@ -737,7 +718,7 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
 
     cloudMats.forEach((m) => {
       m.color.lerpColors(cloudDay, cloudNight, kit.night);
-      m.opacity = 0.9 - kit.night * 0.45;
+      m.opacity = 0.5 - kit.night * 0.25;
     });
     clouds.forEach((c) => {
       c.a += c.sp * dt;
@@ -753,6 +734,6 @@ export function makeSkyLife(kit: Kit, scene: THREE.Scene): void {
       lp[i * 3 + 2] = s.z + Math.cos(t * 0.4 + s.ph) * 0.5;
     }
     (lg.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    lanternMat.opacity = 0.15 + kit.night * 0.75;
+    lanternMat.opacity = 0.12 + kit.night * 0.45;
   });
 }

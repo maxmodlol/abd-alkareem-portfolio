@@ -29,3 +29,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# film clips before encoding (scripts/film.mjs)
+/film-src/

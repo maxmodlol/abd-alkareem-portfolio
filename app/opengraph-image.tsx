@@ -23,30 +23,30 @@ export default function OpenGraphImage() {
           alignItems: "flex-start",
           justifyContent: "center",
           padding: "0 96px",
-          background: "linear-gradient(180deg, #0b3039 0%, #22838a 100%)",
+          background: "radial-gradient(ellipse at 50% 120%, #2a3349 0%, #111521 45%, #090b10 100%)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 28 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 14, background: "#f25c54" }} />
-          <span style={{ fontSize: 30, color: "#fff8ee", fontFamily: fontStack }}>
-            Abd Alkareem Abu-Alsoud
+          <div style={{ width: 56, height: 1, background: "#d7c68a" }} />
+          <span style={{ fontSize: 26, color: "#d7c68a", letterSpacing: "0.32em", fontFamily: fontStack }}>
+            ABD ALKAREEM ABU-ALSOUD
           </span>
         </div>
         <div
           style={{
             display: "flex",
-            fontSize: 92,
-            fontWeight: 800,
-            lineHeight: 1.02,
-            letterSpacing: "-0.03em",
-            color: "#fff8ee",
+            fontSize: 84,
+            fontWeight: 300,
+            lineHeight: 1.06,
+            letterSpacing: "-0.01em",
+            color: "#ece6d6",
             fontFamily: fontStack,
             maxWidth: 900,
           }}
         >
           Products are cities. I build the plumbing.
         </div>
-        <div style={{ display: "flex", marginTop: 34, fontSize: 28, color: "#cfe9ea", fontFamily: fontStack }}>
+        <div style={{ display: "flex", marginTop: 34, fontSize: 28, color: "#9aa1b0", fontFamily: fontStack }}>
           Full-stack engineer. SaaS, CRM and mobile products.
         </div>
       </div>

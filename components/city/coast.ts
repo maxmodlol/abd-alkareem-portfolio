@@ -133,7 +133,8 @@ export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): Solid[] 
   /* the beach: rings of sand from the lawn edge down under the water, dry on top and wet at the waterline */
   const ringOff = (w: number) => [-0.25, 0.3, Math.max(0.42, w * 0.55), w, w + 1.0, w + 2.8];
   const ringY = [-0.004, -0.05, -0.2, SEA_Y, SEA_Y - 0.45, SEA_Y - 1.4];
-  const ringC = [0xf2c983, 0xefc07a, 0xe6b16c, 0xd29b5c, 0xbf8c54, 0x9f7a52].map((c) => new THREE.Color(c));
+  /* a stone promenade rather than sand: pale composite at the lawn, darkening into the water */
+  const ringC = [0xb8b9be, 0xadaeb4, 0x9c9ea5, 0x6a6d75, 0x4b4e56, 0x30333a].map((c) => new THREE.Color(c));
   const RN = ringY.length;
   const pos = new Float32Array((N + 1) * RN * 3);
   const col = new Float32Array((N + 1) * RN * 3);
@@ -277,17 +278,17 @@ export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): Solid[] 
     });
   });
 
-  /* portals where the roads leave the island: cars drive into a swirl of light */
-  const frame = kit.mat(0xdfe7ec, 0.35, 0.2);
-  const trim = kit.glowMat(0x4ff3ff, 0.9, 1.8, 0x103038);
+  /* transit gates where the roads leave the island: cars drive into a slow vortex of gold light */
+  const frame = kit.mat(0x4a505c, 0.4, 0.6);
+  const trim = kit.glowMat(0xff6fb0, 0.9, 1.8, 0x14130e);
   const swirl = canvasTex(256, 256, (g, w, h) => {
-    g.fillStyle = "#04121c";
+    g.fillStyle = "#07080c";
     g.fillRect(0, 0, w, h);
     for (let i = 0; i < 9; i++) {
       const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.5);
-      gr.addColorStop(0, "rgba(140,250,255,0.55)");
-      gr.addColorStop(1, "rgba(20,120,170,0)");
-      g.strokeStyle = `rgba(110,240,255,${0.15 + (i % 3) * 0.12})`;
+      gr.addColorStop(0, "rgba(243,226,176,0.45)");
+      gr.addColorStop(1, "rgba(120,100,60,0)");
+      g.strokeStyle = `rgba(215,198,138,${0.12 + (i % 3) * 0.1})`;
       g.lineWidth = 6;
       g.beginPath();
       g.arc(w / 2, h / 2, 18 + i * 13, i * 0.7, i * 0.7 + Math.PI * 1.2);
@@ -300,6 +301,7 @@ export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): Solid[] 
   });
   swirl.center.set(0.5, 0.5);
   const holeMat = new THREE.MeshBasicMaterial({ map: swirl });
+  holeMat.userData.keepColor = true;
   const mouth = (axis: "x" | "z", s: 1 | -1) => {
     const g = new THREE.Group();
     g.position.set(axis === "x" ? s * 10.6 : 0, 0, axis === "z" ? s * 10.6 : 0);
@@ -307,7 +309,9 @@ export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): Solid[] 
     island.add(g);
     solids.push({ x: g.position.x, z: g.position.z, r: 1.9, obj: g });
     kit.box(g, 2.5, 1.35, 1.2, frame, 0, 0, 0);
-    kit.box(g, 2.6, 0.08, 1.3, trim, 0, 1.35, 0, false);
+    kit.box(g, 2.6, 0.08, 1.3, frame, 0, 1.35, 0, false);
+    kit.box(g, 2.64, 0.035, 0.04, trim, 0, 1.38, 0.66, false);
+    kit.box(g, 2.64, 0.035, 0.04, trim, 0, 1.38, -0.66, false);
     const hole = new THREE.Mesh(new THREE.PlaneGeometry(1.75, 0.95), holeMat);
     hole.position.set(0, 0.5, -0.61 * s);
     hole.rotation.y = s > 0 ? Math.PI : 0;
@@ -330,7 +334,7 @@ export function makeCoast(kit: Kit, island: THREE.Group, palms: Palms): Solid[] 
 /* Islets: sandy rings with a hill and a palm or two; the far ones are mountains                   */
 /* ------------------------------------------------------------------ */
 export function makeIslets(kit: Kit, scene: THREE.Scene, palms: Palms): void {
-  const sandMat = new THREE.MeshStandardMaterial({ color: 0xefc07a, roughness: 1, side: THREE.DoubleSide });
+  const sandMat = new THREE.MeshStandardMaterial({ color: 0x9c9ea5, roughness: 1, side: THREE.DoubleSide });
   const hillMat = new THREE.MeshStandardMaterial({ color: 0x5fae48, roughness: 0.95, flatShading: true });
   const farMat = new THREE.MeshStandardMaterial({ color: 0x5a9f52, roughness: 1, flatShading: true });
   const R = rng(61);
@@ -353,7 +357,13 @@ export function makeIslets(kit: Kit, scene: THREE.Scene, palms: Palms): void {
     hill.castShadow = !far;
     hill.receiveShadow = !far;
     scene.add(hill);
-    if (far || i === 1) return;
+    if (far) {
+      /* the rest of the city: towers across the bay, softened by the haze */
+      hill.scale.y = h * 0.35;
+      makeSkyline(kit, scene, x, z, r, 900 + i * 17);
+      return;
+    }
+    if (i === 1) return;
     const n = r > 2 ? 3 : 2;
     for (let k = 0; k < n; k++) {
       const a = R() * Math.PI * 2;
@@ -361,6 +371,28 @@ export function makeIslets(kit: Kit, scene: THREE.Scene, palms: Palms): void {
     }
   });
   void kit;
+}
+
+/** A cluster of distant towers: dark glass, a few lit floors and a hairline of gold on the tallest. */
+function makeSkyline(kit: Kit, scene: THREE.Scene, cx: number, cz: number, r: number, seed: number): void {
+  const R = rng(seed);
+  const facs = [0, 1].map((k) => kit.facade(k ? "#4a5060" : "#2c313c", { cols: 8, rows: 24, seed: seed + k, lit: 0.42, day: 0.5, night: 2.2 }));
+  const roof = kit.mat(0x2a2e38, 0.6, 0.4);
+  const crown = kit.glowMat(0xff6fb0, 0.9, 2.4, 0x1a1810);
+  const n = Math.round(r * 0.7);
+  for (let k = 0; k < n; k++) {
+    const a = R() * Math.PI * 2;
+    const d = Math.sqrt(R()) * r * 0.62;
+    const x = cx + Math.cos(a) * d;
+    const z = cz + Math.sin(a) * d;
+    const w = 2.4 + R() * 3.2;
+    const h = 10 + R() * 26 * (1 - d / r);
+    kit.box(scene, w, h, w * (0.7 + R() * 0.5), kit.sides(facs[k % 2], roof), x, 0, z, false);
+    if (h > 22) {
+      kit.box(scene, w * 0.7, h * 0.12, w * 0.6, kit.sides(facs[(k + 1) % 2], roof), x, h, z, false);
+      kit.box(scene, w * 0.72, 0.18, w * 0.62, crown, x, h * 1.12, z, false);
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -380,12 +412,12 @@ export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): Solid
   const ax = Math.cos(DOWNTOWN_A);
   const az = Math.sin(DOWNTOWN_A);
   const at = (u: number, v: number): [number, number] => [ax * u - az * v, az * u + ax * v];
-  const glow = kit.glowMat(0x4ff3ff, 0.7, 2.2, 0x0e2a30);
+  const glow = kit.glowMat(0xff6fb0, 0.7, 2.2, 0x14130e);
   const blink = kit.glowMat(0xff3b30, 1.5, 5, 0x330000);
   const blinkers: THREE.Mesh[] = [];
   const rings: THREE.Mesh[] = [];
   const ringMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0x6ff6ff).multiplyScalar(1.3),
+    color: new THREE.Color(0xf4f1ff).multiplyScalar(1.2),
     transparent: true,
     opacity: 0.55,
     blending: THREE.AdditiveBlending,
@@ -395,12 +427,12 @@ export function makeDowntown(kit: Kit, island: THREE.Group, palms: Palms): Solid
 
   /* u along the lobe, v across it; w, d footprint; h height; style; extra */
   const towers: [number, number, number, number, number, number, "" | "spire" | "ring" | "antenna"][] = [
-    [11.9, -2.9, 1.5, 1.5, 6.4, 0, "antenna"],
-    [14.6, -4.1, 1.4, 1.4, 5.2, 3, ""],
-    [14.6, 4.1, 1.5, 1.5, 9.2, 0, "antenna"],
-    [16.3, -1.7, 1.8, 1.8, 10.2, 4, "spire"],
-    [16.5, 2.1, 1.3, 1.3, 7.2, 2, "ring"],
-    [17.2, 0.3, 1.0, 1.0, 4.6, 1, ""],
+    [11.9, -2.9, 1.4, 1.4, 8.4, 0, "antenna"],
+    [14.6, -4.1, 1.4, 1.4, 6.8, 3, ""],
+    [14.6, 4.1, 1.4, 1.5, 12.4, 0, "antenna"],
+    [16.3, -1.7, 1.7, 1.7, 14.2, 4, "spire"],
+    [16.5, 2.1, 1.3, 1.3, 9.6, 2, "ring"],
+    [17.2, 0.3, 1.0, 1.0, 6.0, 1, ""],
   ];
   towers.forEach(([u, v, w, d, h, si, extra], i) => {
     const [x, z] = at(u, v);
